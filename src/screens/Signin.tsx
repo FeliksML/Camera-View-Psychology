@@ -3,13 +3,18 @@
 import { sx } from '../lib/sx'
 import { pseudo } from '../lib/pseudo'
 import { useApp } from '../store/AppContext'
+import signinBg from '../../assets/recraft/illustrations/signin-bg-1.png'
 
 export function Signin() {
   const v = useApp()
   return (
     <>
       {v.sSignin && (
-        <div data-screen-label="02 Sign in" style={sx("position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;padding:0 28px;box-sizing:border-box;animation:cvFadeUp .45s ease both")}>
+        <div data-screen-label="02 Sign in" style={sx("position:absolute;inset:0;animation:cvFadeUp .45s ease both")}>
+          {/* Recraft atmospheric backdrop — aperture motif over near-empty dark space for the buttons */}
+          <div style={sx(`position:absolute;inset:0;z-index:0;background-image:url(${signinBg});background-size:cover;background-position:center top;opacity:.7;pointer-events:none`)} />
+          <div style={sx("position:absolute;inset:0;z-index:0;background:linear-gradient(180deg,transparent 0%,transparent 44%,rgba(16,14,27,.55) 78%,rgba(16,14,27,.85) 100%);pointer-events:none")} />
+          <div style={sx("position:absolute;inset:0;z-index:1;display:flex;flex-direction:column;align-items:center;padding:0 28px;box-sizing:border-box")}>
           <div style={sx("flex:1.1;display:flex;flex-direction:column;align-items:center;justify-content:flex-end")}>
             <div style={sx("position:relative;width:120px;height:120px;display:flex;align-items:center;justify-content:center")}>
               <div style={sx("position:absolute;inset:0;border:1px solid rgba(58,55,82,.7);border-radius:50%")} />
@@ -93,6 +98,7 @@ export function Signin() {
               <path d="M3.5 6V4.5a3 3 0 0 1 6 0V6" fill="none" stroke="#8FBFAF" strokeWidth="1.2" />
             </svg>
             {" End-to-end account privacy. Delete your data anytime. "}
+          </div>
           </div>
         </div>
       )}
