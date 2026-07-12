@@ -1,9 +1,12 @@
-// Native iOS glue (no-ops in the browser): status bar, splash screen, and
-// breathing haptics that follow the grounding stage's 8s inhale/exhale cycle.
+// Native iOS glue (no-ops in the browser): status bar, splash screen, OAuth
+// deep-link handoff, and breathing haptics that follow the grounding stage's
+// 8s inhale/exhale cycle.
 import { Capacitor } from '@capacitor/core'
+import { App } from '@capacitor/app'
 import { StatusBar, Style } from '@capacitor/status-bar'
 import { SplashScreen } from '@capacitor/splash-screen'
 import { Haptics, ImpactStyle } from '@capacitor/haptics'
+import { handleAuthCallback } from '../store/storage'
 
 interface StoreLike {
   state: { screen?: string; stage?: number; haptics?: boolean; loopPhase?: string }
@@ -16,6 +19,12 @@ export function initNative(storeRef: { current: StoreLike | null }): void {
   StatusBar.setStyle({ style: Style.Dark }).catch(() => {})
   StatusBar.setOverlaysWebView({ overlay: true }).catch(() => {})
   SplashScreen.hide().catch(() => {})
+
+  // OAuth comes back as cameraview://auth-callback?code=… — exchange it for a
+  // session; the store's onAuthChange listener finishes the sign-in.
+  App.addListener('appUrlOpen', ({ url }) => {
+    if (url.startsWith('cameraview://auth-callback')) void handleAuthCallback(url)
+  })
 
   let breath: number | undefined
   let exhale: number | undefined
