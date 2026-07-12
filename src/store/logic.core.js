@@ -888,17 +888,17 @@ export class AppStore extends StoreBase {
     // The aura cools as intensity drops (setup rating → latest estimate/re-rate).
     const calmDrop = s.intensity > 0 ? Math.max(0, Math.min(1, (s.intensity - s.lastIntensity) / s.intensity)) : 0;
     const aura = auraColors[Math.min(auraColors.length - 1, Math.round(calmDrop * (auraColors.length - 1)))];
-    const auraStyle = 'position:absolute;left:50%;top:34%;width:72px;height:44px;transform:translateX(-50%);border-radius:50%;filter:blur(15px);background:' + aura + ';transition:background 1.4s ease';
+    const auraStyle = 'position:absolute;left:50%;top:calc(50% - 47px);width:72px;height:44px;transform:translateX(-50%);border-radius:50%;filter:blur(15px);background:' + aura + ';transition:background 1.4s ease';
     const calmPct = Math.min(88, 14 + Math.round(calmDrop * 74));
     const calmRef = (el) => { if (el) el.style.width = calmPct + '%'; };
     const chatRef = (el) => { if (el) el.scrollTop = el.scrollHeight; };
 
     // ----- session path map (algorithmic for now) -----
     const liveMoments = this.classifyMoments(s.chat);
-    const liveMap = this.mapModel(liveMoments, s.topics, 362, 148, false);
+    const liveMap = this.mapModel(liveMoments, s.topics, 334, 148, false);
     const copyCount = liveMoments.filter(m => m.who === 'copy').length;
     const sumMoments = copyCount >= 2 ? liveMoments : this.classifyMoments(this.demoChat());
-    const sumMap = this.mapModel(sumMoments, copyCount >= 2 ? s.topics : [], 314, 150, true);
+    const sumMap = this.mapModel(sumMoments, copyCount >= 2 ? s.topics : [], 288, 150, true);
     const firstQ = sumMoments.find(m => m.kind === 'q');
     let deepM = null;
     sumMoments.forEach(m => { if (m.kind === 'memory' && (!deepM || m.depth > deepM.depth)) deepM = m; });
@@ -1126,7 +1126,7 @@ export class AppStore extends StoreBase {
       figureShown: !s.mapOpen,
       mapOpen: s.mapOpen,
       toggleMap: () => this.setState({ mapOpen: !s.mapOpen }),
-      mapChipStyle: 'position:absolute;left:20px;top:104px;height:24px;padding:0 11px;border-radius:99px;display:flex;align-items:center;gap:6px;font-size:11px;cursor:pointer;z-index:4;transition:all .2s;' +
+      mapChipStyle: 'height:24px;padding:0 11px;border-radius:99px;display:flex;align-items:center;gap:6px;font-size:11px;cursor:pointer;transition:all .2s;' +
         (s.mapOpen ? 'border:1px solid rgba(232,161,136,.7);background:rgba(232,161,136,.12);color:#E8A188' : 'border:1px solid #3A3752;background:rgba(38,36,64,.6);color:#A5A1C2'),
       mapChipLabel: liveMap.deepest >= 3 ? 'Path · childhood' : (liveMap.deepest >= 1 ? 'Path · deeper' : 'Path'),
       liveMapPath: liveMap.path, liveDots: liveMap.dots, liveRows: liveMap.rows, liveBranches: liveMap.branches,

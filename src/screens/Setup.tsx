@@ -22,7 +22,7 @@ export function Setup() {
             <div style={sx("font-family:Lora,serif;font-size:24px;margin-top:8px")}>What happened?</div>
             <div style={sx("font-size:13.5px;color:#A5A1C2;margin-top:4px")}>One sentence is enough.</div>
             <div style={sx("position:relative;margin-top:12px")}>
-              <textarea value={v.situation} onChange={v.onSituation} placeholder="e.g. My boss criticized me in front of the team" style={sx("width:100%;min-height:96px;box-sizing:border-box;background:rgba(38,36,64,.8);border:1px solid #3A3752;border-radius:18px;padding:14px 40px 14px 16px;color:#ECEAF7;font-family:Inter,sans-serif;font-size:15px;line-height:1.5;resize:none;outline:none")} className={pseudo('focus', "border-color:rgba(232,161,136,.6)")} />
+              <textarea value={v.situation} onChange={v.onSituation} placeholder="e.g. My boss criticized me in front of the team" style={sx("width:100%;min-height:96px;box-sizing:border-box;background:rgba(38,36,64,.8);border:1px solid #3A3752;border-radius:18px;padding:14px 40px 14px 16px;color:#ECEAF7;font-family:Inter,sans-serif;font-size:16px;line-height:1.5;resize:none;outline:none")} className={pseudo('focus', "border-color:rgba(232,161,136,.6)")} />
               <svg width="15" height="20" viewBox="0 0 15 20" style={sx("position:absolute;right:14px;bottom:14px;opacity:.6")}>
                 <rect x="4.5" y="1" width="6" height="11" rx="3" fill="none" stroke="#A5A1C2" strokeWidth="1.2" />
                 <path d="M1.5 9.5a6 6 0 0 0 12 0M7.5 15.5V19" fill="none" stroke="#A5A1C2" strokeWidth="1.2" strokeLinecap="round" />
