@@ -25,22 +25,61 @@ export function Signin() {
             <div style={sx("font-size:15px;color:#A5A1C2;margin-top:8px")}>Your sessions stay private.</div>
           </div>
           <div style={sx("flex:1.3;display:flex;flex-direction:column;justify-content:flex-start;width:100%;gap:12px;padding-top:10px")}>
-            <div onClick={v.signIn} style={sx("height:56px;border-radius:28px;background:#ECEAF7;color:#15141F;display:flex;align-items:center;justify-content:center;gap:9px;font-size:16px;font-weight:600;cursor:pointer")} className={pseudo('active', "transform:scale(.98)")}>
-              <svg width="16" height="19" viewBox="0 0 16 19">
-                <path d="M13.1 10.1c0-2.4 2-3.6 2.1-3.7-1.1-1.7-2.9-1.9-3.5-1.9-1.5-.2-2.9.9-3.7.9-.8 0-1.9-.9-3.2-.8C3.2 4.6 1.7 5.5.9 7c-1.7 3-.4 7.4 1.2 9.8.8 1.2 1.8 2.5 3 2.4 1.2 0 1.7-.8 3.1-.8 1.5 0 1.9.8 3.2.8 1.3 0 2.1-1.2 2.9-2.4.9-1.4 1.3-2.7 1.3-2.8 0 0-2.5-1-2.5-3.9zM10.6 2.8c.7-.8 1.1-1.9 1-3-1 0-2.1.7-2.8 1.5-.6.7-1.2 1.8-1 2.9 1.1.1 2.2-.6 2.8-1.4z" fill="#15141F" />
-              </svg>
-              {" Continue with Apple "}
-            </div>
-            <div onClick={v.signIn} style={sx("height:56px;border-radius:28px;border:1px solid #A5A1C2;color:#ECEAF7;display:flex;align-items:center;justify-content:center;gap:10px;font-size:16px;font-weight:500;cursor:pointer")} className={pseudo('hover', "background:rgba(236,234,247,.05)")}>
-              <svg width="18" height="18" viewBox="0 0 18 18">
-                <path d="M17.64 9.2c0-.637-.057-1.251-.164-1.84H9v3.481h4.844c-.209 1.125-.843 2.078-1.796 2.717v2.258h2.908c1.702-1.567 2.684-3.874 2.684-6.615z" fill="#8FA8E8" />
-                <path d="M9 18c2.43 0 4.467-.806 5.956-2.18l-2.908-2.259c-.806.54-1.837.86-3.048.86-2.344 0-4.328-1.584-5.036-3.711H.957v2.332C2.438 15.983 5.482 18 9 18z" fill="#8FBFAF" />
-                <path d="M3.964 10.71c-.18-.54-.282-1.117-.282-1.71s.102-1.17.282-1.71V4.958H.957C.347 6.173 0 7.548 0 9s.348 2.827.957 4.042l3.007-2.332z" fill="#E8CE88" />
-                <path d="M9 3.58c1.321 0 2.508.454 3.44 1.345l2.582-2.58C13.463.891 11.426 0 9 0 5.482 0 2.438 2.017.957 4.958L3.964 7.29C4.672 5.163 6.656 3.58 9 3.58z" fill="#E8A188" />
-              </svg>
-              {" Continue with Google "}
-            </div>
-            <div onClick={v.signIn} style={sx("height:56px;border-radius:28px;border:1px solid #A5A1C2;color:#ECEAF7;display:flex;align-items:center;justify-content:center;font-size:16px;font-weight:500;cursor:pointer")} className={pseudo('hover', "background:rgba(236,234,247,.05)")}>Continue with email</div>
+            {v.authButtons && (
+              <>
+                <div onClick={v.signIn} style={sx("height:56px;border-radius:28px;background:#ECEAF7;color:#15141F;display:flex;align-items:center;justify-content:center;gap:9px;font-size:16px;font-weight:600;cursor:pointer")} className={pseudo('active', "transform:scale(.98)")}>
+                  <svg width="16" height="19" viewBox="0 0 16 19">
+                    <path d="M13.1 10.1c0-2.4 2-3.6 2.1-3.7-1.1-1.7-2.9-1.9-3.5-1.9-1.5-.2-2.9.9-3.7.9-.8 0-1.9-.9-3.2-.8C3.2 4.6 1.7 5.5.9 7c-1.7 3-.4 7.4 1.2 9.8.8 1.2 1.8 2.5 3 2.4 1.2 0 1.7-.8 3.1-.8 1.5 0 1.9.8 3.2.8 1.3 0 2.1-1.2 2.9-2.4.9-1.4 1.3-2.7 1.3-2.8 0 0-2.5-1-2.5-3.9zM10.6 2.8c.7-.8 1.1-1.9 1-3-1 0-2.1.7-2.8 1.5-.6.7-1.2 1.8-1 2.9 1.1.1 2.2-.6 2.8-1.4z" fill="#15141F" />
+                  </svg>
+                  {" Continue with Apple "}
+                </div>
+                <div onClick={v.signInGoogle} style={sx("height:56px;border-radius:28px;border:1px solid #A5A1C2;color:#ECEAF7;display:flex;align-items:center;justify-content:center;gap:10px;font-size:16px;font-weight:500;cursor:pointer")} className={pseudo('hover', "background:rgba(236,234,247,.05)")}>
+                  <svg width="18" height="18" viewBox="0 0 18 18">
+                    <path d="M17.64 9.2c0-.637-.057-1.251-.164-1.84H9v3.481h4.844c-.209 1.125-.843 2.078-1.796 2.717v2.258h2.908c1.702-1.567 2.684-3.874 2.684-6.615z" fill="#8FA8E8" />
+                    <path d="M9 18c2.43 0 4.467-.806 5.956-2.18l-2.908-2.259c-.806.54-1.837.86-3.048.86-2.344 0-4.328-1.584-5.036-3.711H.957v2.332C2.438 15.983 5.482 18 9 18z" fill="#8FBFAF" />
+                    <path d="M3.964 10.71c-.18-.54-.282-1.117-.282-1.71s.102-1.17.282-1.71V4.958H.957C.347 6.173 0 7.548 0 9s.348 2.827.957 4.042l3.007-2.332z" fill="#E8CE88" />
+                    <path d="M9 3.58c1.321 0 2.508.454 3.44 1.345l2.582-2.58C13.463.891 11.426 0 9 0 5.482 0 2.438 2.017.957 4.958L3.964 7.29C4.672 5.163 6.656 3.58 9 3.58z" fill="#E8A188" />
+                  </svg>
+                  {" Continue with Google "}
+                </div>
+                <div onClick={v.signInEmail} style={sx("height:56px;border-radius:28px;border:1px solid #A5A1C2;color:#ECEAF7;display:flex;align-items:center;justify-content:center;font-size:16px;font-weight:500;cursor:pointer")} className={pseudo('hover', "background:rgba(236,234,247,.05)")}>Continue with email</div>
+              </>
+            )}
+            {v.authEmailMode && (
+              <>
+                <input
+                  value={v.authEmail}
+                  onChange={v.onAuthEmail}
+                  onKeyDown={v.authEmailKey}
+                  type="email"
+                  inputMode="email"
+                  autoCapitalize="none"
+                  placeholder="you@example.com"
+                  style={sx("height:56px;border-radius:28px;border:1px solid #3A3752;background:rgba(38,36,64,.6);color:#ECEAF7;padding:0 22px;font-size:16px;outline:none;font-family:Inter,sans-serif;box-sizing:border-box;width:100%")}
+                />
+                <div onClick={v.authSend} style={sx("height:56px;border-radius:28px;background:#E8A188;color:#1E1C33;display:flex;align-items:center;justify-content:center;font-size:16px;font-weight:600;cursor:pointer")} className={pseudo('active', "transform:scale(.98)")}>{v.authSendLabel}</div>
+                <div onClick={v.authBack} style={sx("text-align:center;font-size:14px;color:#A5A1C2;cursor:pointer;padding:4px")} className={pseudo('hover', "color:#ECEAF7")}>Back</div>
+              </>
+            )}
+            {v.authCodeMode && (
+              <>
+                <div style={sx("text-align:center;font-size:13.5px;color:#A5A1C2")}>{"We sent a 6-digit code to "}{v.authEmail}</div>
+                <input
+                  value={v.authCode}
+                  onChange={v.onAuthCode}
+                  onKeyDown={v.authCodeKey}
+                  inputMode="numeric"
+                  autoComplete="one-time-code"
+                  placeholder="••••••"
+                  style={sx("height:56px;border-radius:28px;border:1px solid #3A3752;background:rgba(38,36,64,.6);color:#ECEAF7;padding:0 22px;font-size:22px;letter-spacing:.5em;text-align:center;outline:none;font-family:Inter,sans-serif;box-sizing:border-box;width:100%")}
+                />
+                <div onClick={v.authVerify} style={sx("height:56px;border-radius:28px;background:#E8A188;color:#1E1C33;display:flex;align-items:center;justify-content:center;font-size:16px;font-weight:600;cursor:pointer")} className={pseudo('active', "transform:scale(.98)")}>{v.authVerifyLabel}</div>
+                <div onClick={v.authBack} style={sx("text-align:center;font-size:14px;color:#A5A1C2;cursor:pointer;padding:4px")} className={pseudo('hover', "color:#ECEAF7")}>Use a different email</div>
+              </>
+            )}
+            {v.hasAuthErr && (
+              <div style={sx("text-align:center;font-size:13px;color:#C97E6B")}>{v.authErr}</div>
+            )}
             <div style={sx("text-align:center;font-size:12px;color:#6B678C;margin-top:4px")}>
               {"By continuing you agree to "}
               <span style={sx("text-decoration:underline")}>Terms</span>

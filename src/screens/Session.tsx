@@ -11,13 +11,13 @@ export function Session() {
       {v.sSession && (
         <div style={sx("position:absolute;inset:0")}>
           <div style={sx("position:absolute;inset:0;box-shadow:inset 0 0 110px 40px rgba(10,9,18,.6);pointer-events:none;z-index:2")} />
-          <div style={sx("position:absolute;top:64px;left:50%;transform:translateX(-50%);display:flex;gap:6px;z-index:3")}>
+          <div style={sx("position:absolute;top:calc(64px + env(safe-area-inset-top, 0px));left:50%;transform:translateX(-50%);display:flex;gap:6px;z-index:3")}>
             {v.segs.map((g: any, i: number) => (
               <div key={i} style={sx(g.style)} />
             ))}
           </div>
-          <div onClick={v.closeSession} style={sx("position:absolute;top:52px;right:18px;width:34px;height:34px;display:flex;align-items:center;justify-content:center;color:#6B678C;font-size:17px;cursor:pointer;z-index:3")} className={pseudo('hover', "color:#ECEAF7")}>✕</div>
-          <div style={sx("position:absolute;top:80px;left:0;right:0;text-align:center;font-size:10.5px;letter-spacing:.18em;color:#6B678C;z-index:3")}>{v.stageLabel}</div>
+          <div onClick={v.closeSession} style={sx("position:absolute;top:calc(52px + env(safe-area-inset-top, 0px));right:18px;width:34px;height:34px;display:flex;align-items:center;justify-content:center;color:#6B678C;font-size:17px;cursor:pointer;z-index:3")} className={pseudo('hover', "color:#ECEAF7")}>✕</div>
+          <div style={sx("position:absolute;top:calc(80px + env(safe-area-inset-top, 0px));left:0;right:0;text-align:center;font-size:10.5px;letter-spacing:.18em;color:#6B678C;z-index:3")}>{v.stageLabel}</div>
           {/* 5 · GROUNDING */}
           {v.st1 && (
             <div data-screen-label="05 Session - Grounding" style={sx("position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;animation:cvFade .6s ease both")}>
@@ -276,7 +276,7 @@ export function Session() {
                     <div key={i} onClick={q.tap} style={sx("height:32px;padding:0 13px;border-radius:99px;border:1px solid #3A3752;display:flex;align-items:center;font-size:12.5px;color:#A5A1C2;cursor:pointer")} className={pseudo('hover', "border-color:#A5A1C2;color:#ECEAF7")}>{q.t}</div>
                   ))}
                 </div>
-                <div style={sx("padding:6px 22px 30px;display:flex;align-items:center;gap:10px")}>
+                <div style={sx("padding:6px 22px calc(30px + env(safe-area-inset-bottom, 0px));display:flex;align-items:center;gap:10px")}>
                   <div style={sx("flex:1;position:relative")}>
                     <input value={v.chatInput} onChange={v.onChatInput} onKeyDown={v.onChatKey} placeholder="Speak to your copy…" style={sx("width:100%;box-sizing:border-box;height:46px;border-radius:99px;background:rgba(38,36,64,.8);border:1px solid #3A3752;padding:0 44px 0 18px;color:#ECEAF7;font-family:Inter,sans-serif;font-size:14.5px;outline:none")} className={pseudo('focus', "border-color:rgba(232,161,136,.6)")} />
                     <svg width="13" height="18" viewBox="0 0 15 20" style={sx("position:absolute;right:17px;top:14px;opacity:.55")}>

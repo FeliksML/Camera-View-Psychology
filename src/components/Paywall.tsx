@@ -15,7 +15,7 @@ export function Paywall() {
             <div style={sx("display:flex;justify-content:center;padding:10px 0 0")}>
               <div style={sx("width:38px;height:4.5px;border-radius:99px;background:rgba(165,161,194,.35)")} />
             </div>
-            <div style={sx("flex:1;overflow-y:auto;padding:6px 24px 30px")} className="cvs">
+            <div style={sx("flex:1;overflow-y:auto;padding:6px 24px calc(30px + env(safe-area-inset-bottom, 0px))")} className="cvs">
               <div style={sx("position:relative;height:210px;margin:8px -8px 0")}>
                 <div style={sx("position:absolute;left:0;right:0;bottom:0;height:90px;background:radial-gradient(ellipse at 50% 100%,rgba(232,161,136,.22) 0%,transparent 70%)")} />
                 <div style={sx("position:absolute;left:14%;top:12%;width:3px;height:3px;border-radius:50%;background:rgba(236,234,247,.5)")} />

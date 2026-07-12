@@ -1,57 +1,84 @@
 # CameraView
 
-A self-distancing therapy app prototype — step outside a difficult moment, watch
-yourself "through a camera", guide your copy from distress to calm, and leave
-with a better belief. 17 screens: onboarding → sign-in → home → session setup →
-six-stage guided session (grounding, scene, camera pull-back, guide-your-copy
-chat with a live session path map, belief work, coming back) → summary →
-journal / progress / connections, plus paywall, settings, and crisis support.
+A self-distancing therapy app — step outside a difficult moment, watch yourself
+"through a camera", guide your copy from distress to calm, and leave with a
+better belief. Started as a 1:1 port of the claude.ai/design project
+**"CameraView дизайн-промпты"**; now a real product:
 
-Implemented as a Vite + React 18 + TypeScript SPA, ported 1:1 from the
-claude.ai/design project **"CameraView дизайн-промпты"**
-(`CameraView Prototype.dc.html` — imported in [design/](design/)).
+- **AI guide** — the stage-4 chat, belief drafting, and cross-session
+  "Connections" clustering run on `claude-sonnet-5` via Supabase Edge
+  Functions (`supabase/functions/{guide,belief,threads}`). The design's
+  scripted dialog remains as the offline/error fallback.
+- **Accounts & sync** — Supabase email-OTP auth; sessions/settings live in
+  Postgres behind RLS, cached locally (localStorage) so the app boots
+  instantly and works offline (queued writes flush on reconnect).
+- **Real data** — journal, streak, calm-shift, progress charts and
+  Connections derive from your actual sessions. Crisis screen uses real
+  `tel:988` / `sms:741741` links. Guide voice via on-device TTS.
+- **iOS app** — Capacitor 8 wrapper (`ios/`), safe-area aware, dark splash,
+  status bar, breathing haptics. Desktop keeps the design's demo shell
+  (navigator rail + device frame).
 
-## Run
+## Run (web)
 
 ```bash
 npm install
-npm run dev        # http://localhost:5173 (or PORT)
-npm run build      # tsc --noEmit + vite build
+cp .env.example .env.local     # fill VITE_SUPABASE_URL + VITE_SUPABASE_ANON_KEY
+npm run dev                    # http://localhost:5173
+npm run build                  # tsc --noEmit + vite build
 ```
 
-Dev state toggles (the design's `data-props`):
+Dev toggles: `VITE_MOCK_AUTH=1` (fake local user, no emails needed),
+`?empty=1` (empty journal), `?plus=1` (decorative — Plus is always on in the
+personal build).
 
-- `?empty=1` — empty journal state
-- `?plus=1` — Plus subscription active
+## Run (iPhone)
 
-## Layout
+```bash
+npm run build && npx cap sync ios
+npx cap open ios               # Xcode: pick your Team → Run on your iPhone
+```
 
-Desktop shows the design's demo shell: screen-navigator rail + iOS device
-frame. Below 1000px the rail hides; at ≤450px the app runs full-bleed
-(bezel, dynamic island, and mock status bar removed).
+One-time setup that only the account owner can do:
+
+1. **Anthropic API key** — create a fresh key at console.anthropic.com
+   (rotate any key that was ever pasted into a chat), then:
+   `supabase secrets set ANTHROPIC_API_KEY=sk-ant-…` (project `cameraview` /
+   `nmiypjoafwfscflpbkzv`), or Dashboard → Edge Functions → Secrets.
+   Until the secret exists, the app silently falls back to the scripted guide.
+2. **Auth redirect** — Supabase Dashboard → Auth → URL Configuration → add
+   `capacitor://localhost` to allowed redirect URLs (email OTP works without
+   it, but keep it for future OAuth).
+3. **Xcode signing** — select your Apple Developer team for the `App` target,
+   run on device, trust the developer profile on the iPhone
+   (Settings → General → VPN & Device Management). Optional: Archive →
+   TestFlight.
 
 ## Architecture
 
-- `src/store/logic.core.js` — the design's state machine, byte-identical to the
-  `<script data-dc-script>` in the .dc.html (only the class header changed).
-  Keep it in sync with the design file; fidelity fixes go there first.
-- `src/store/StoreBase.ts` — minimal DCLogic replacement (setState, subscribe,
-  mount hooks) wired to React via `useSyncExternalStore` in
-  `src/store/AppContext.tsx`.
-- `src/lib/sx.ts` — memoized CSS-text → style-object parser; lets both the
-  logic layer and the converted JSX keep the design's CSS strings verbatim.
-- `src/lib/pseudo.ts` — port of the dc-runtime's style-hover/active/focus
-  pseudo-class sheet.
-- `src/screens/*`, `src/components/*` — generated from the template by
-  `scripts/dc-to-jsx.mjs` (one-off codemod), then hand-tuned.
-- `src/ios/IOSFrame.tsx` — TSX port of the design's iOS 26 device frame.
+- `src/store/logic.core.js` — the app's single state machine. Productized
+  from the design's dc-script (no longer byte-synced): auth flow, async AI
+  calls with scripted fallback, real dates/stats, TTS, crisis links.
+- `src/store/storage.ts` — local-first cache + Supabase sync (append-only
+  sessions with an offline queue; debounced last-write-wins settings) +
+  `callFn()` edge-function client (returns `null` → caller uses fallback).
+- `supabase/functions/` — Deno edge functions (verify_jwt): `guide` returns
+  `{copy_reply, coach_note, depth, shift, risk, advance, suggested_replies}`
+  as structured output; `risk:true` routes the app to the crisis screen;
+  `threads` clusters sessions into shared roots and caches them.
+- `src/lib/sx.ts` + `src/lib/pseudo.ts` — the design's CSS-string styling
+  system (see git history for the prototype phase).
+- `src/native/ios.ts` — Capacitor glue: status bar, splash, breathing
+  haptics synced to the grounding stage.
+- `design/` — the original prototype, kept as visual reference
+  (`cd design && python3 -m http.server 8123`, needs network).
 
-## Original prototype (reference)
+Supabase project: `nmiypjoafwfscflpbkzv` (eu-central-1) — tables `profiles`,
+`sessions`, `threads_cache`, all RLS `auth.uid()`-scoped.
 
-The imported design files run as-is for side-by-side comparison — serve them
-raw (Vite would transform the .jsx import):
+## Phase 2 backlog
 
-```bash
-cd design && python3 -m http.server 8123
-# open http://localhost:8123/CameraView%20Prototype.dc.html  (needs network for unpkg React/Babel)
-```
+Sign in with Apple/Google (needs Services ID in the Apple portal) · push
+session reminders · StoreKit payments + real paywall · App Store release ·
+narrated scene audio (stage 2) · account deletion & data export · realtime
+multi-device sync.
