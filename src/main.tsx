@@ -15,3 +15,8 @@ createRoot(document.getElementById('root')!).render(
 
 // Native glue (status bar / splash / breathing haptics) — no-op in the browser.
 initNative(appStoreRef)
+
+// Dev-only console handle for state debugging
+if (import.meta.env.DEV) {
+  ;(window as unknown as { __store: typeof appStoreRef }).__store = appStoreRef
+}
