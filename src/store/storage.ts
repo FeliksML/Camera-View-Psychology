@@ -19,6 +19,11 @@ const anonKey = import.meta.env.VITE_SUPABASE_ANON_KEY as string | undefined
 export const supabase: SupabaseClient | null =
   url && anonKey ? createClient(url, anonKey, { auth: { persistSession: true, autoRefreshToken: true } }) : null
 
+// Dev-only console handle for debugging auth/sync (not shipped in prod builds)
+if (import.meta.env.DEV && typeof window !== 'undefined') {
+  ;(window as unknown as { __sb: SupabaseClient | null }).__sb = supabase
+}
+
 export interface SessionRow {
   id: string
   started_at: string
