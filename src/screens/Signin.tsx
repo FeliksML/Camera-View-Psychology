@@ -87,8 +87,8 @@ export function Signin() {
               <span style={sx("text-decoration:underline")}>Privacy</span>
             </div>
           </div>
-          <div style={sx("padding-bottom:44px;display:flex;align-items:center;gap:7px;font-size:13px;color:#8FBFAF")}>
-            <svg width="13" height="15" viewBox="0 0 13 15">
+          <div style={sx("padding-bottom:44px;display:flex;align-items:center;justify-content:center;gap:7px;font-size:11.5px;color:#8FBFAF;text-align:center")}>
+            <svg width="13" height="15" viewBox="0 0 13 15" style={sx("flex:none")}>
               <rect x="1" y="6" width="11" height="8" rx="2" fill="none" stroke="#8FBFAF" strokeWidth="1.2" />
               <path d="M3.5 6V4.5a3 3 0 0 1 6 0V6" fill="none" stroke="#8FBFAF" strokeWidth="1.2" />
             </svg>

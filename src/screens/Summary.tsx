@@ -56,14 +56,14 @@ export function Summary() {
                   <path d="M1 3.5 C3.5 3.5 3.5 8.5 6 8.5 S8.5 2 11 2 14 6 14 6" fill="none" stroke="#6B678C" strokeWidth="1.2" strokeLinecap="round" />
                 </svg>
               </div>
-              <div style={sx("position:relative;height:150px;margin-top:10px")}>
+              <div style={sx("position:relative;height:150px;width:288px;max-width:100%;margin:10px auto 0")}>
                 {v.sumRows.map((rw: any, i: number) => (
                   <div key={i}>
                     <div style={sx(rw.line)} />
                     <div style={sx(rw.lab)}>{rw.label}</div>
                   </div>
                 ))}
-                <svg width="314" height="150" viewBox="0 0 314 150" style={sx("position:absolute;left:0;top:0;overflow:visible")}>
+                <svg width="288" height="150" viewBox="0 0 288 150" style={sx("position:absolute;left:0;top:0;overflow:visible")}>
                   <defs>
                     <linearGradient id="cvGradB" x1="0" y1="0" x2="1" y2="0">
                       <stop offset="0" stopColor="#E26454" />

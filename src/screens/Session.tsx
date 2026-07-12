@@ -108,7 +108,7 @@ export function Session() {
           {/* 7 · CAMERA PULL-OUT */}
           {v.st3 && (
             <div data-screen-label="07 Session - Step back" style={sx("position:absolute;inset:0;animation:cvFade .6s ease both")}>
-              <div style={sx("position:absolute;top:118px;left:34px;right:34px;text-align:center;font-family:Lora,serif;font-size:20px;line-height:1.45;color:#ECEAF7;z-index:4;text-wrap:pretty")}>
+              <div style={sx("position:absolute;top:calc(112px + env(safe-area-inset-top, 0px));left:34px;right:34px;text-align:center;font-family:Lora,serif;font-size:20px;line-height:1.45;color:#ECEAF7;z-index:4;text-wrap:pretty")}>
                 Now, gently dolly back. That person in the frame is you — and you're safe here, watching.
               </div>
               {/* film dolly */}
@@ -152,20 +152,23 @@ export function Session() {
           {/* 8 · OBSERVE & GUIDE */}
           {v.st4 && (
             <div data-screen-label="08 Session - Guide your copy" style={sx("position:absolute;inset:0;display:flex;flex-direction:column;animation:cvFade .6s ease both")}>
-              <div style={sx("height:35%;position:relative;flex:none")}>
-                <div style={sx("position:absolute;right:20px;top:104px;height:24px;padding:0 11px;border-radius:99px;border:1px solid #3A3752;background:rgba(38,36,64,.6);display:flex;align-items:center;font-size:11px;color:#A5A1C2;z-index:3")}>{v.emoChip}</div>
-                <div onClick={v.toggleMap} style={sx(v.mapChipStyle)} className={pseudo('hover', "border-color:#A5A1C2")}>
-                  <svg width="15" height="11" viewBox="0 0 15 11">
-                    <path d="M1 3.5 C3.5 3.5 3.5 8.5 6 8.5 S8.5 2 11 2 14 6 14 6" fill="none" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" />
-                  </svg>
-                  {v.mapChipLabel}
+              {/* Header flows top-down (HUD clearance → chips row → figure/map slot) so nothing overlaps at any viewport height */}
+              <div style={sx("flex:none;position:relative;padding-top:calc(104px + env(safe-area-inset-top, 0px))")}>
+                <div style={sx("display:flex;align-items:center;justify-content:space-between;padding:0 20px;position:relative;z-index:3")}>
+                  <div onClick={v.toggleMap} style={sx(v.mapChipStyle)} className={pseudo('hover', "border-color:#A5A1C2")}>
+                    <svg width="15" height="11" viewBox="0 0 15 11">
+                      <path d="M1 3.5 C3.5 3.5 3.5 8.5 6 8.5 S8.5 2 11 2 14 6 14 6" fill="none" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" />
+                    </svg>
+                    {v.mapChipLabel}
+                  </div>
+                  <div style={sx("height:24px;padding:0 11px;border-radius:99px;border:1px solid #3A3752;background:rgba(38,36,64,.6);display:flex;align-items:center;font-size:11px;color:#A5A1C2")}>{v.emoChip}</div>
                 </div>
                 {v.figureShown && (
-                  <div>
-                    <div style={sx("position:absolute;left:50%;top:58%;width:170px;height:170px;transform:translate(-50%,-50%);border:1px solid rgba(236,234,247,.3);border-radius:50%")} />
-                    <div style={sx("position:absolute;left:50%;top:70%;width:150px;height:40px;transform:translate(-50%,-50%);background:radial-gradient(ellipse,rgba(236,234,247,.14) 0%,transparent 70%)")} />
+                  <div style={sx("position:relative;height:172px;margin-top:4px")}>
+                    <div style={sx("position:absolute;left:50%;top:50%;width:150px;height:150px;transform:translate(-50%,-50%);border:1px solid rgba(236,234,247,.3);border-radius:50%")} />
+                    <div style={sx("position:absolute;left:50%;top:calc(50% + 32px);width:150px;height:40px;transform:translate(-50%,-50%);background:radial-gradient(ellipse,rgba(236,234,247,.14) 0%,transparent 70%)")} />
                     <div style={sx(v.auraStyle)} />
-                    <div style={sx("position:absolute;left:50%;top:58%;transform:translate(-50%,-50%)")}>
+                    <div style={sx("position:absolute;left:50%;top:50%;transform:translate(-50%,-50%)")}>
                       <svg width="36" height="58" viewBox="0 0 60 96">
                         <path d="M30 6 C36 6 40 11 40 17 C40 22 37 26 33 28 C43 31 48 42 48 56 L48 78 C48 88 40 92 30 92 C20 92 12 88 12 78 L12 56 C12 42 17 31 27 28 C23 26 20 22 20 17 C20 11 24 6 30 6 Z" fill="#131120" stroke="rgba(236,234,247,.5)" strokeWidth="1" />
                       </svg>
@@ -173,14 +176,14 @@ export function Session() {
                   </div>
                 )}
                 {v.mapOpen && (
-                  <div style={sx("position:absolute;left:20px;right:20px;top:138px;height:148px;animation:cvFade .4s ease both")}>
+                  <div style={sx("position:relative;height:160px;width:334px;max-width:calc(100% - 40px);margin:12px auto 0;animation:cvFade .4s ease both")}>
                     {v.liveRows.map((rw: any, i: number) => (
                       <div key={i}>
                         <div style={sx(rw.line)} />
                         <div style={sx(rw.lab)}>{rw.label}</div>
                       </div>
                     ))}
-                    <svg width="362" height="148" viewBox="0 0 362 148" style={sx("position:absolute;left:0;top:0;overflow:visible")}>
+                    <svg width="334" height="148" viewBox="0 0 334 148" style={sx("position:absolute;left:0;top:0;overflow:visible")}>
                       <defs>
                         <linearGradient id="cvGradA" x1="0" y1="0" x2="1" y2="0">
                           <stop offset="0" stopColor="#E26454" />
@@ -266,7 +269,7 @@ export function Session() {
                   )}
                   {v.topicOpen && (
                     <div style={sx("flex:1;display:flex;gap:8px;align-items:center")}>
-                      <input value={v.topicText} onChange={v.onTopicText} onKeyDown={v.topicKey} placeholder="Name what flashed up — a few words" style={sx("flex:1;height:32px;border-radius:99px;background:rgba(38,36,64,.8);border:1px dashed rgba(143,191,175,.5);padding:0 14px;color:#ECEAF7;font-family:Inter,sans-serif;font-size:12.5px;outline:none")} />
+                      <input value={v.topicText} onChange={v.onTopicText} onKeyDown={v.topicKey} placeholder="Name what flashed up — a few words" style={sx("flex:1;height:32px;border-radius:99px;background:rgba(38,36,64,.8);border:1px dashed rgba(143,191,175,.5);padding:0 14px;color:#ECEAF7;font-family:Inter,sans-serif;font-size:16px;outline:none")} />
                       <div onClick={v.saveTopic} style={sx("height:32px;padding:0 14px;border-radius:99px;background:rgba(143,191,175,.18);border:1px solid rgba(143,191,175,.5);display:flex;align-items:center;font-size:12px;color:#8FBFAF;cursor:pointer")}>Save</div>
                     </div>
                   )}
@@ -319,7 +322,7 @@ export function Session() {
                 {v.phReport && (
                   <div style={sx("padding:6px 22px calc(30px + env(safe-area-inset-bottom, 0px));display:flex;align-items:center;gap:10px")}>
                     <div style={sx("flex:1;position:relative")}>
-                      <input value={v.report} onChange={v.onReport} onKeyDown={v.reportKey} placeholder="What did your copy say?" style={sx("width:100%;box-sizing:border-box;height:46px;border-radius:99px;background:rgba(38,36,64,.8);border:1px solid #3A3752;padding:0 44px 0 18px;color:#ECEAF7;font-family:Inter,sans-serif;font-size:14.5px;outline:none")} className={pseudo('focus', "border-color:rgba(232,161,136,.6)")} />
+                      <input value={v.report} onChange={v.onReport} onKeyDown={v.reportKey} placeholder="What did your copy say?" style={sx("width:100%;box-sizing:border-box;height:46px;border-radius:99px;background:rgba(38,36,64,.8);border:1px solid #3A3752;padding:0 44px 0 18px;color:#ECEAF7;font-family:Inter,sans-serif;font-size:16px;outline:none")} className={pseudo('focus', "border-color:rgba(232,161,136,.6)")} />
                       <svg width="13" height="18" viewBox="0 0 15 20" style={sx("position:absolute;right:17px;top:14px;opacity:.55")}>
                         <rect x="4.5" y="1" width="6" height="11" rx="3" fill="none" stroke="#A5A1C2" strokeWidth="1.2" />
                         <path d="M1.5 9.5a6 6 0 0 0 12 0M7.5 15.5V19" fill="none" stroke="#A5A1C2" strokeWidth="1.2" strokeLinecap="round" />
@@ -364,7 +367,7 @@ export function Session() {
           )}
           {/* 9 · BELIEF WORK */}
           {v.st5 && (
-            <div data-screen-label="09 Session - The belief" style={sx("position:absolute;inset:0;display:flex;flex-direction:column;padding:104px 24px 30px;box-sizing:border-box;animation:cvFade .6s ease both")}>
+            <div data-screen-label="09 Session - The belief" style={sx("position:absolute;inset:0;display:flex;flex-direction:column;padding:calc(108px + env(safe-area-inset-top, 0px)) 24px 30px;box-sizing:border-box;animation:cvFade .6s ease both")}>
               <div style={sx("display:flex;align-items:center;gap:12px")}>
                 <div style={sx("position:relative;width:54px;height:54px;flex:none")}>
                   <div style={sx("position:absolute;inset:0;border:1px solid rgba(236,234,247,.3);border-radius:50%")} />
