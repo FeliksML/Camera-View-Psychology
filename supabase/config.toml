@@ -1,0 +1,4 @@
+# Supabase CLI link for CameraView (remote project, eu-central-1).
+# The pre-migrations schema (profiles/sessions/threads_cache + RLS) lives remote-only;
+# run `supabase db pull` once to baseline it before adding new DDL locally.
+project_id = "nmiypjoafwfscflpbkzv"

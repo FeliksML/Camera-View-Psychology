@@ -39,6 +39,11 @@ export interface SessionRow {
   chat: unknown[]
   moments: unknown[]
   topics: unknown[]
+  // Mirror Dialogue Loop (v2) — optional so pre-loop rows keep hydrating cleanly
+  intensity_checkpoints?: { i: number; at: number; source: string }[]
+  outcome?: 'completed' | 'partial' | 'safety_stopped' | 'abandoned' | null
+  loop_stats?: Record<string, number>
+  old_belief_source?: 'inferred' | 'confirmed' | 'edited' | null
 }
 
 export interface Settings {

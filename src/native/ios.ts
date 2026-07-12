@@ -6,7 +6,7 @@ import { SplashScreen } from '@capacitor/splash-screen'
 import { Haptics, ImpactStyle } from '@capacitor/haptics'
 
 interface StoreLike {
-  state: { screen?: string; stage?: number; haptics?: boolean }
+  state: { screen?: string; stage?: number; haptics?: boolean; loopPhase?: string }
   subscribe: (l: () => void) => () => void
 }
 
@@ -27,7 +27,12 @@ export function initNative(storeRef: { current: StoreLike | null }): void {
   }
   const sync = () => {
     const s = storeRef.current?.state
-    const active = !!s && s.screen === 'session' && s.stage === 1 && s.haptics !== false
+    // Breathe with the user during grounding and during the stage-4 observation pause.
+    const active =
+      !!s &&
+      s.screen === 'session' &&
+      (s.stage === 1 || (s.stage === 4 && (s.loopPhase === 'asking' || s.loopPhase === 'grounding'))) &&
+      s.haptics !== false
     if (active && breath === undefined) {
       pulse()
       breath = window.setInterval(pulse, 8000)

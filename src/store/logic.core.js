@@ -1,9 +1,11 @@
 // PRODUCTIZED from design/CameraView Prototype.dc.html <script data-dc-script>.
 // No longer byte-synced with the design file (that contract ended with product v1):
 // real auth (Supabase email OTP), persisted sessions/settings, Claude-powered
-// guide/belief/threads via edge functions, real dates & stats, crisis deep links,
-// TTS guide voice. The scripted COPY_SAYS/COACH engine remains as the offline
-// fallback. Visual bindings keep the design's names and CSS-string style.
+// navigate/belief/threads via edge functions, real dates & stats, crisis deep links,
+// TTS guide voice. Stage 4 is the Mirror Dialogue Loop (v2): the user asks their
+// copy aloud and reports what came back; the AI navigates only — it never speaks
+// as the copy. A question-bank + heuristic navigator covers offline/error.
+// Visual bindings keep the design's names and CSS-string style.
 import { StoreBase } from './StoreBase'
 import {
   MOCK,
@@ -26,34 +28,68 @@ const dayKey = (iso) => new Date(iso).toISOString().slice(0, 10)
 export class AppStore extends StoreBase {
   constructor(props) {
     super(props);
-    this.OLD = "If I get criticized, it means I'm worthless.";
     this.DRAFTS = [
       "Criticism stings, but it doesn't define my worth.",
       "I can handle moments like this — I've done it before.",
       "I know how to steady myself when things get loud."
     ];
-    this.COPY_SAYS = [
-      "I felt so small in front of everyone… like nothing I do is ever enough.",
-      "That they're right about me. It's the same feeling as when I was eight — dad checking my homework at the kitchen table, waiting for the mistake. I just want someone to actually hear me — not fix me.",
-      "…That helps. It's quieter in my chest now. I can breathe.",
-      "I'm… okay, I think. It's over. It wasn't the end of the world.",
-      "I can handle moments like this. I've done it before — I know how."
-    ];
-    this.COACH = [
-      "They needed to say that out loud. Don't fix it yet — stay curious, ask what's underneath. And if other memories flash up while they talk, note them for later — each one is its own session.",
-      "Hear that — it just reached back to age eight, all on its own. You didn't have to dig; the path dipped into childhood by itself. Let it keep moving, and when it's had its say — tell them what they need to hear, as a kind friend.",
-      "Watch their shoulders drop. The wave passed because you let it speak. Now circle back to the start — ask them again: how are you now?",
-      "'Okay' is progress — the storm passed. But don't stop at neutral. Ask what they can do now, what they know about themselves — help them find something stronger.",
-      "Hear where that belief lives — inside you, not in anyone else's hands. That's the one we keep. Let's write it down."
-    ];
-    this.REDIRECT = [
-      "Gently — that might quiet them before they've spoken. Ask a question instead, and let them empty it out.",
-      "Kind words come later. Right now curiosity heals more — ask what's going on inside them."
-    ];
-    this.ASK_REDIRECT = "Put it as a question — it lands deeper when the words come from them, not from you.";
+    // Mirror Dialogue Loop (v2): the user asks their copy aloud and reports back what
+    // it "said" — the AI navigates only, it never speaks as the copy. Everything below
+    // is the offline navigator: question bank, scripted notes, and the legal-transition
+    // table that also validates AI-proposed next_state.
+    this.LOOP_INTRO = "I'll offer a question. Ask it to your copy out loud, watch them — then tell me what came back.";
+    this.QUESTION_BANK = {
+      en: {
+        open: ["What's happening for you right now?", "What's hurting right now?", 'What do you feel right now?'],
+        deeper: ["What's underneath that?", 'When did you first feel this?', 'What are you afraid of?'],
+        support: ['What do you need from me right now?', 'What would help right now?'],
+        checkin: ['How are you now?', "What's left in your body?"],
+        strength: ['What do you know about yourself now?', 'What can you do next time?']
+      },
+      ru: {
+        open: ['Что с тобой сейчас происходит?', 'Что сейчас болит?', 'Что ты сейчас чувствуешь?'],
+        deeper: ['А что под этим?', 'Когда ты впервые это почувствовал?', 'Чего ты боишься?'],
+        support: ['Что тебе сейчас нужно от меня?', 'Чем я могу помочь прямо сейчас?'],
+        checkin: ['Как ты сейчас?', 'Что осталось в теле?'],
+        strength: ['Что ты теперь о себе знаешь?', 'Что ты сможешь сделать в следующий раз?']
+      }
+    };
+    this.QUESTION_INTENTS = ['open', 'deeper', 'deeper', 'support', 'checkin', 'strength'];
+    this.WAIT_NOTE = {
+      en: "That's normal. Give it another minute or two — just watch, no rush.",
+      ru: 'Это нормально. Дай ещё минуту-две — просто наблюдай, без спешки.'
+    };
+    this.SCRIPT_NOTES = {
+      en: {
+        emotion: 'Heard. Let that land — then ask the next one.',
+        memory: "Notice — it reached back on its own. Don't rush it; ask on.",
+        relief: "See — it's quieter now. Let's check how much.",
+        new_topic: "Noted — we'll come back to that. For now, stay with what's in front of you."
+      },
+      ru: {
+        emotion: 'Слышу. Дай этому побыть услышанным — и спроси дальше.',
+        memory: 'Смотри — оно само потянулось назад. Не торопи, спроси дальше.',
+        relief: 'Видишь — стало тише. Давай сверим, насколько.',
+        new_topic: 'Это отметим отдельно — вернёмся к нему. Сейчас останемся с тем, что перед тобой.'
+      }
+    };
+    this.GROUNDING_NOTE = {
+      en: "Let's stop here. Slow breath out. Feet on the floor. Name five things you can see. This deserves real human support — don't carry it alone.",
+      ru: 'Остановимся. Медленный выдох. Ноги на пол, почувствуй опору. Назови пять вещей, которые видишь. Это заслуживает живой поддержки — не оставайся с этим один.'
+    };
+    this.LOOP_TRANSITIONS = {
+      question: ['asking', 'question'],
+      asking: ['awaiting_report', 'wait_more'],
+      awaiting_report: ['analyzing'],
+      analyzing: ['question', 'wait_more', 'intensity_check', 'fixation', 'grounding', 'complete'],
+      wait_more: ['awaiting_report', 'question', 'wait_more'],
+      intensity_check: ['question', 'fixation', 'complete'],
+      grounding: []
+    };
+    this.SOFT_MAX = 18; // exchanges per session before a soft completion
     this.EMOTIONS = ['Anxiety', 'Anger', 'Sadness', 'Shame', 'Fear', 'Resentment', 'Other'];
     this.ECOLORS = { Anxiety: '#E8A188', Anger: '#D9A96B', Sadness: '#8E9BB8', Shame: '#B48FB8', Fear: '#7E96A8', Resentment: '#C98F9A', Other: '#A5A1C2' };
-    this.STAGE_LABELS = ['GROUNDING', 'THE SCENE', 'STEP BACK', 'GUIDE YOUR COPY', 'THE BELIEF', 'COMING BACK'];
+    this.STAGE_LABELS = ['GROUNDING', 'THE SCENE', 'STEP BACK', 'ASK YOUR COPY', 'THE BELIEF', 'COMING BACK'];
     this.state = this.freshState();
   }
 
@@ -68,10 +104,14 @@ export class AppStore extends StoreBase {
       situation: '', emotion: 'Anxiety', intensity: 7,
       stage: 1, voiceOn: st.voiceOn !== undefined ? st.voiceOn : true, playing: false, audioT: 80,
       pullDepth: 0,
-      chat: [{ g: true, u: false, c: false, t: "Look at them standing there. Don't rush to calm them — let them speak first. Ask your copy a question: what is happening for them right now?" }],
-      chatStep: 0, redir: 0, chatInput: '', typing: false,
+      chat: [{ g: true, u: false, c: false, t: this.LOOP_INTRO }],
+      loopPhase: 'question', proposedQ: '', altQ: null, qRequests: 0,
+      silenceCount: 0, silenceTotal: 0, exchangeCount: 0, report: '', typing: false,
+      intensityTrail: [], lastIntensity: 7, lastCheckAt: 0,
+      oldBelief: '', oldBeliefEdited: false, aiCheck: null, safetyStopped: false,
+      copyClass: null, parkOffer: false, loopEnd: null, observeStart: null,
       draftI: 0, belief: "Criticism stings, but it doesn't define my worth.",
-      aiDrafts: null, suggested: null,
+      aiDrafts: null,
       after: 3, remind: false, filter: 'All',
       sessions: c.sessions || [],
       threads: c.threads, threadsBusy: false,
@@ -195,98 +235,262 @@ export class AppStore extends StoreBase {
   startSession() {
     this.setState({
       screen: 'session', stage: 1, pullDepth: 0, playing: false, audioT: 80,
-      chat: [{ g: true, u: false, c: false, t: "Look at them standing there. Don't rush to calm them — let them speak first. Ask your copy a question: what is happening for them right now?" }],
-      chatStep: 0, redir: 0, chatInput: '', typing: false, after: 3, draftI: 0, belief: this.DRAFTS[0], mapOpen: false,
-      aiDrafts: null, suggested: null, topics: [], remind: false,
+      chat: [{ g: true, u: false, c: false, t: this.LOOP_INTRO }],
+      loopPhase: 'question', proposedQ: '', altQ: null, qRequests: 0,
+      silenceCount: 0, silenceTotal: 0, exchangeCount: 0, report: '', typing: false,
+      intensityTrail: [{ i: this.state.intensity, at: 0, source: 'setup' }],
+      lastIntensity: this.state.intensity, lastCheckAt: 0,
+      oldBelief: '', oldBeliefEdited: false, aiCheck: null, safetyStopped: false,
+      copyClass: null, parkOffer: false, loopEnd: null, observeStart: null,
+      after: 3, draftI: 0, belief: this.DRAFTS[0], mapOpen: false,
+      aiDrafts: null, topics: [], remind: false,
       startedAt: Date.now(), sessionId: crypto.randomUUID()
     });
+    this.setState({ proposedQ: this.bankQuestion(0) });
     this.speak("Let's arrive first. Three slow breaths — just follow the circle.");
   }
-  send(text) {
+  // ----- Mirror Dialogue Loop (stage 4) -----
+  // The user asks their copy aloud and reports back what it "said". The AI (edge fn
+  // `navigate`) only classifies the report and proposes the next step; this machine
+  // is the sole authority on transitions.
+  langKey() {
+    const s = this.state;
+    const mine = s.chat.filter(m => !m.g).map(m => m.t).join(' ');
+    return /[а-яё]/i.test((s.situation || '') + ' ' + mine) ? 'ru' : 'en';
+  }
+  loopIntent() {
+    const i = Math.min(this.state.exchangeCount, this.QUESTION_INTENTS.length - 1);
+    return this.QUESTION_INTENTS[i];
+  }
+  bankQuestion(shiftBy) {
+    const bank = this.QUESTION_BANK[this.langKey()][this.loopIntent()];
+    return bank[(this.state.qRequests + (shiftBy || 0)) % bank.length];
+  }
+  // The only place loopPhase is decided. Safety first, then the legal-transition
+  // table, then guardrails — an illegal or unwise AI proposal gets coerced.
+  applyTransition(next, extra) {
+    extra = extra || {};
+    const s = this.state;
+    if (extra.acute) { this.enterGrounding(extra.note); return; }
+    const legal = this.LOOP_TRANSITIONS[s.loopPhase] || [];
+    if (legal.indexOf(next) < 0) {
+      next = s.loopPhase === 'analyzing' ? 'question' : s.loopPhase === 'asking' ? 'wait_more' : s.loopPhase;
+    }
+    if (next === 'wait_more' && s.silenceCount >= 2) { next = 'question'; extra.softer = true; }
+    if (next === 'intensity_check' && s.exchangeCount - s.lastCheckAt < 3) next = 'question';
+    if ((next === 'question' || next === 'wait_more') && s.exchangeCount >= this.SOFT_MAX) next = 'complete';
+    if (next === 'question') this.enterQuestion(extra);
+    else if (next === 'wait_more') this.enterWait(extra.withNote !== false);
+    else if (next === 'awaiting_report') this.setState({ loopPhase: 'awaiting_report', typing: false });
+    else if (next === 'intensity_check') this.setState({ loopPhase: 'intensity_check', lastCheckAt: s.exchangeCount, typing: false });
+    else if (next === 'fixation') this.finishLoop(false);
+    else if (next === 'complete') this.finishLoop(true);
+    else if (next === 'grounding') this.enterGrounding(extra.note);
+  }
+  enterQuestion(extra) {
+    extra = extra || {};
+    const q = extra.q || (extra.softer && this.state.altQ) || this.bankQuestion(extra.softer ? 1 : 0);
+    this.setState({ proposedQ: q, loopPhase: 'question', typing: false, silenceCount: 0 });
+  }
+  enterWait(withNote) {
+    if (withNote) {
+      const note = this.WAIT_NOTE[this.langKey()];
+      this.setState(s => ({ chat: s.chat.concat([{ g: true, u: false, c: false, t: note }]) }));
+      this.speak(note);
+    }
+    this.setState(s => ({
+      loopPhase: 'wait_more', typing: false,
+      silenceCount: s.silenceCount + 1, silenceTotal: s.silenceTotal + 1
+    }));
+  }
+  enterGrounding(note) {
+    if (note) {
+      this.setState(s => ({ chat: s.chat.concat([{ g: true, u: false, c: false, t: note }]) }));
+      this.speak(note);
+    }
+    this.setState({ loopPhase: 'grounding', typing: false, safetyStopped: true, loopEnd: 'safety' });
+  }
+  askAloud() {
+    const q = this.state.proposedQ;
+    if (!q) return;
+    this.setState(s => ({
+      chat: s.chat.concat([{ g: false, u: true, c: false, t: q }]),
+      loopPhase: 'asking', observeStart: Date.now(), qRequests: 0
+    }));
+  }
+  anotherQuestion() {
+    const s = this.state;
+    if (s.altQ && s.altQ !== s.proposedQ) { this.setState({ proposedQ: s.altQ, altQ: null, qRequests: s.qRequests + 1 }); return; }
+    this.setState({ qRequests: s.qRequests + 1 });
+    this.setState({ proposedQ: this.bankQuestion(0) });
+  }
+  copySilent() {
+    if (this.state.silenceCount >= 2) {
+      // Two waits already — don't hold the user in silence; soften the question.
+      this.enterQuestion({ softer: true });
+      return;
+    }
+    this.enterWait(true);
+  }
+  finishLoop(atCap) {
+    const s = this.state;
+    const end = atCap ? 'cap' : 'flow';
+    if (s.topics.some(tp => !tp.status || tp.status === 'parked')) {
+      this.setState({ typing: false, loopEnd: end, parkOffer: true, loopPhase: 'question' });
+      return;
+    }
+    this.setState({ typing: false, loopEnd: end });
+    this.toBelief();
+  }
+  parkResolve(mode) {
+    const s = this.state;
+    if (mode === 'now') {
+      const tp = s.topics.find(x => !x.status || x.status === 'parked') || s.topics[0];
+      const q = this.langKey() === 'ru' ? 'Что для тебя «' + tp.t + '»?' : 'What is "' + tp.t + '" for you?';
+      this.setState({
+        parkOffer: false, loopEnd: null,
+        topics: s.topics.map(x => (x === tp ? Object.assign({}, x, { status: 'now' }) : x)),
+        proposedQ: q, loopPhase: 'question'
+      });
+    } else {
+      this.setState({
+        parkOffer: false,
+        topics: s.topics.map(x => Object.assign({}, x, { status: x.status === 'now' ? 'now' : 'next_session' }))
+      });
+      this.showToast('Saved for your next session.');
+      this.toBelief();
+    }
+  }
+  toBelief() {
+    this.setState({ stage: 5 });
+    if (!this.state.aiDrafts) this.fetchBeliefs();
+  }
+  confirmIntensity() {
+    const s = this.state;
+    const i = Math.round(s.lastIntensity);
+    this.setState({
+      intensityTrail: s.intensityTrail.concat([{ i, at: s.exchangeCount, source: 'self' }]),
+      lastCheckAt: s.exchangeCount, lastIntensity: i
+    });
+    if (i <= 3) this.finishLoop(false);
+    else this.enterQuestion({});
+  }
+  submitReport(text) {
     const t = (text || '').trim();
-    if (!t || this.state.typing || this.state.chatStep >= 5) return;
-    const step = this.state.chatStep;
-    const isQ = /\?/.test(t) || /^(what|why|how|where|when|who|do you|are you|can you|tell me)/i.test(t);
-    this.setState(s => ({ chat: s.chat.concat([{ g: false, u: true, c: false, t }]), chatInput: '', typing: true }));
+    if (!t || this.state.typing) return;
+    this.setState(s => ({
+      chat: s.chat.concat([{ g: false, u: false, c: true, t }]),
+      report: '', typing: true, loopPhase: 'analyzing', exchangeCount: s.exchangeCount + 1
+    }));
     // Crisis backstop — instant and offline-safe; the AI's `risk` flag is the smarter net.
     if (/(kill myself|suicid|self.?harm|end my life|не хочу жить|покончи|убить себя)/i.test(t)) {
-      this.setState({ typing: false });
+      this.setState({ typing: false, safetyStopped: true, loopEnd: 'safety' });
       this.go('crisis');
       return;
     }
-    const needsQ = step !== 2;
-    if (needsQ && !isQ && step < 2) {
-      // Instant coaching redirect (kept local: it's UX, not intelligence)
-      this.ct = setTimeout(() => {
-        this.setState(s => ({
-          chat: s.chat.concat([{ g: true, u: false, c: false, t: this.REDIRECT[s.redir % this.REDIRECT.length] }]),
-          redir: s.redir + 1, typing: false
-        }));
-      }, 1100);
-      return;
-    }
-    if (navigator.onLine === false) { this.sendScripted(step, isQ); return; }
-    this.sendAI(step, isQ);
+    if (navigator.onLine === false) { this.mirrorScripted(t); return; }
+    this.sendMirror(t);
   }
-  // The design's original scripted engine — now the offline/error fallback.
-  sendScripted(step, isQ) {
-    const needsQ = step !== 2;
-    if (needsQ && !isQ) {
-      this.ct = setTimeout(() => {
-        this.setState(s => ({
-          chat: s.chat.concat([{ g: true, u: false, c: false, t: this.ASK_REDIRECT }]),
-          redir: s.redir + 1, typing: false
-        }));
-      }, 1100);
-      return;
-    }
-    this.ct = setTimeout(() => {
-      this.setState(s => ({ chat: s.chat.concat([{ g: false, u: false, c: true, t: this.COPY_SAYS[step] }]) }));
-      this.ct = setTimeout(() => {
-        const coach = this.COACH[step];
-        this.setState(s => ({
-          chat: s.chat.concat([{ g: true, u: false, c: false, t: coach }]),
-          chatStep: s.chatStep + 1, typing: false
-        }));
-        this.speak(coach);
-      }, 1600);
-    }, 1100);
-  }
-  async sendAI(step, isQ) {
-    const s0 = this.state;
-    const transcript = s0.chat.map(m => ({ who: m.g ? 'coach' : m.u ? 'you' : 'copy', text: m.t }));
-    const r = await callFn('guide', {
-      situation: s0.situation, emotion: s0.emotion, intensity: s0.intensity,
-      chatStep: step, transcript
+  stampReport(patch) {
+    this.setState(s => {
+      const chat = s.chat.slice();
+      for (let i = chat.length - 1; i >= 0; i--) {
+        if (chat[i].c) { chat[i] = Object.assign({}, chat[i], patch); break; }
+      }
+      return { chat };
     });
-    if (!r || !r.copy_reply || !r.coach_note) { this.sendScripted(step, isQ); return; }
+  }
+  parkTopics(list) {
+    if (!list || !list.length) return;
+    this.setState(s => ({
+      topics: s.topics.concat(list.map(tp => ({
+        t: tp.label || tp.t, quote: tp.quote || '', status: 'parked',
+        at: s.chat.filter(m => !m.g).length
+      })))
+    }));
+    this.showToast('Noted for its own session.');
+  }
+  async sendMirror(reportText) {
+    const s0 = this.state;
+    const transcript = s0.chat.slice(-20).map(m => ({ who: m.g ? 'navigator' : m.u ? 'question' : 'report', text: m.t }));
+    const r = await callFn('navigate', {
+      situation: s0.situation, emotion: s0.emotion,
+      intensity_setup: s0.intensity,
+      intensity_history: s0.intensityTrail,
+      exchange_count: s0.exchangeCount, silence_count: s0.silenceCount,
+      exchanges_since_check: s0.exchangeCount - s0.lastCheckAt,
+      parked_topics: s0.topics.map(tp => ({ label: tp.t, quote: tp.quote || '' })),
+      transcript
+    });
+    if (!r || !r.reply || !r.next_state) { this.mirrorScripted(reportText); return; }
     if (this.state.screen !== 'session') return; // user left mid-request
-    if (r.risk) { this.setState({ typing: false }); this.go('crisis'); return; }
+    // The AI's read of the report feeds the path map, moments and threads.
+    this.stampReport({ depth: r.report_depth, shift: !!r.shift, cls: r.copy_response_class });
+    this.parkTopics(Array.isArray(r.parked_topics) ? r.parked_topics : []);
+    const est = typeof r.intensity_estimate === 'number' ? Math.max(0, Math.min(10, Math.round(r.intensity_estimate))) : null;
+    const patch = { copyClass: r.copy_response_class };
+    if (r.belief_old && !this.state.oldBeliefEdited) patch.oldBelief = r.belief_old;
+    if (r.suggested_question_alt) patch.altQ = r.suggested_question_alt;
+    if (Array.isArray(r.belief_drafts) && r.belief_drafts.length) patch.aiDrafts = r.belief_drafts.slice(0, 3);
+    if (r.copy_response_class !== 'silence') patch.silenceCount = 0;
+    if (est !== null) patch.lastIntensity = est;
+    this.setState(patch);
+    if (est !== null) this.setState(s => ({ intensityTrail: s.intensityTrail.concat([{ i: est, at: s.exchangeCount, source: 'ai' }]) }));
     // Staged reveal keeps the design's rhythm even though the reply is already here.
     this.ct = setTimeout(() => {
-      this.setState(s => ({
-        chat: s.chat.concat([{ g: false, u: false, c: true, t: r.copy_reply, depth: r.depth, shift: r.shift }])
-      }));
-      this.ct = setTimeout(() => {
-        this.setState(s => ({
-          chat: s.chat.concat([{ g: true, u: false, c: false, t: r.coach_note }]),
-          chatStep: s.chatStep + (r.advance === false ? 0 : 1),
-          suggested: Array.isArray(r.suggested_replies) && r.suggested_replies.length ? r.suggested_replies.slice(0, 3) : null,
-          typing: false
-        }));
-        this.speak(r.coach_note);
-      }, 1600);
-    }, 1100);
+      this.setState(s => ({ chat: s.chat.concat([{ g: true, u: false, c: false, t: r.reply }]) }));
+      this.speak(r.reply);
+      this.applyTransition(r.next_state, {
+        acute: r.risk === 'acute',
+        q: r.suggested_question || null,
+        withNote: false
+      });
+    }, 900);
+  }
+  // Offline navigator — heuristics only; it never fabricates the copy's voice.
+  classifyReport(t) {
+    const x = (t || '').toLowerCase();
+    if (/(паник|задыха|не могу дышать|panic|can't breathe|cant breathe)/.test(x)) return { kind: 'acute' };
+    if (x.split(/\s+/).filter(Boolean).length <= 2 || /молч|ничего не|нет ответа|отвора|silent|says nothing|nothing came|looks away/.test(x)) return { kind: 'silence', depth: 0 };
+    if (this.isShift(x)) return { kind: 'relief', shift: true, depth: this.depthOf(x) };
+    const depth = this.depthOf(x);
+    // Reaching back on the SAME thread ("это как когда мне было восемь…") is the
+    // therapeutic path, not a side topic — deep memories win over new-topic markers.
+    if (depth < 2 && /(а ещё|кстати|ещё вспомнил|вспомнил ещё|заодно|reminds me of|another memory|also remember)/.test(x)) return { kind: 'new_topic', depth };
+    return { kind: depth > 0 ? 'memory' : 'emotion', depth };
+  }
+  mirrorScripted(reportText) {
+    const cls = this.classifyReport(reportText);
+    const lang = this.langKey();
+    this.ct = setTimeout(() => {
+      if (cls.kind === 'acute') { this.enterGrounding(this.GROUNDING_NOTE[lang]); return; }
+      this.stampReport({ depth: cls.depth || 0, shift: !!cls.shift, cls: cls.kind });
+      if (cls.kind === 'silence') { this.applyTransition('wait_more', {}); return; }
+      this.setState({ silenceCount: 0 });
+      const note = this.SCRIPT_NOTES[lang][cls.kind] || this.SCRIPT_NOTES[lang].emotion;
+      this.setState(s => ({ chat: s.chat.concat([{ g: true, u: false, c: false, t: note }]) }));
+      this.speak(note);
+      if (cls.kind === 'new_topic') {
+        this.parkTopics([{ label: this.trunc(reportText, 32), quote: reportText }]);
+        this.applyTransition('question', {});
+      } else if (cls.kind === 'relief') {
+        this.applyTransition('intensity_check', {});
+      } else {
+        this.applyTransition('question', {});
+      }
+    }, 900);
   }
   async fetchBeliefs() {
     const s0 = this.state;
     const transcript = s0.chat.map(m => ({ who: m.g ? 'coach' : m.u ? 'you' : 'copy', text: m.t }));
     const r = await callFn('belief', {
-      situation: s0.situation, emotion: s0.emotion, oldBelief: this.OLD,
+      situation: s0.situation, emotion: s0.emotion, oldBelief: s0.oldBelief || '',
       currentBelief: s0.belief, transcript
     });
     if (r && Array.isArray(r.drafts) && r.drafts.length) {
-      this.setState({ aiDrafts: r.drafts.slice(0, 3), belief: r.drafts[0], draftI: 0 });
+      const patch = { aiDrafts: r.drafts.slice(0, 3), belief: r.drafts[0], draftI: 0 };
+      if (r.check_text && r.check_kind) patch.aiCheck = { text: r.check_text, kind: r.check_kind, for: r.drafts[0] };
+      this.setState(patch);
     }
   }
   async loadThreads(force) {
@@ -313,12 +517,12 @@ export class AppStore extends StoreBase {
   // ----- session path map (algorithmic for now — an LLM will link these dots later) -----
   depthOf(t) {
     const x = (t || '').toLowerCase();
-    if (/(when i was|as a kid|as a child|childhood|years old)/.test(x)) return 3;
-    if (/(school|homework|teenag|grew up|growing up|my (dad|father|mom|mother|parents))/.test(x)) return 2;
-    if (/(\balways\b|\bnever\b|\bever\b|every time|used to|years ago|months ago|last year)/.test(x)) return 1;
+    if (/(when i was|as a kid|as a child|childhood|years old|когда мне было|в детстве|маленьк)/.test(x)) return 3;
+    if (/(school|homework|teenag|grew up|growing up|my (dad|father|mom|mother|parents)|школ|подрост|отец|папа|мама|родител)/.test(x)) return 2;
+    if (/(\balways\b|\bnever\b|\bever\b|every time|used to|years ago|months ago|last year|всегда|никогда|каждый раз|год назад|раньше)/.test(x)) return 1;
     return 0;
   }
-  isShift(t) { return /(i can |i know |i've |i handle|it's over|okay|quieter|breathe|calmer|passed)/.test((t || '').toLowerCase()); }
+  isShift(t) { return /(i can |i know |i've |i handle|it's over|okay|quieter|breathe|calmer|passed|тише|отпустило|легче|спокойн|дыш|прошло)/.test((t || '').toLowerCase()); }
   classifyMoments(chat) {
     const out = [];
     (chat || []).forEach(m => {
@@ -336,9 +540,16 @@ export class AppStore extends StoreBase {
     return out;
   }
   demoChat() {
-    const qs = ["What's hurting right now?", "What's underneath that?", "You're allowed to feel this", 'How are you feeling now?', 'What do you know about yourself now?'];
+    const qs = ["What's hurting right now?", "What's underneath that?", 'What do you need from me?', 'How are you now?', 'What do you know about yourself now?'];
+    const rs = [
+      'I felt so small in front of everyone… like nothing I do is ever enough.',
+      "It's the same feeling as when I was eight — dad checking my homework, waiting for the mistake.",
+      'Someone to actually hear me — not fix me.',
+      "It's quieter in my chest now. I can breathe.",
+      "I can handle moments like this. I've done it before."
+    ];
     const out = [];
-    qs.forEach((t, i) => { out.push({ u: true, t }); out.push({ c: true, t: this.COPY_SAYS[i] }); });
+    qs.forEach((t, i) => { out.push({ u: true, t }); out.push({ c: true, t: rs[i] }); });
     return out;
   }
   trunc(t, n) { t = t || ''; return t.length > n ? t.slice(0, n - 1).replace(/\s+\S*$/, '') + '…' : t; }
@@ -577,7 +788,7 @@ export class AppStore extends StoreBase {
       ['05 Grounding', () => this.go('session', { stage: 1 })],
       ['06 The scene', () => this.go('session', { stage: 2 })],
       ['07 Step back ★', () => this.go('session', { stage: 3 })],
-      ['08 Guide your copy', () => this.go('session', { stage: 4 })],
+      ['08 Ask your copy', () => this.go('session', { stage: 4 })],
       ['09 The belief', () => this.go('session', { stage: 5 })],
       ['10 Coming back', () => this.go('session', { stage: 6 })],
       ['11 Session complete', () => this.go('summary')],
@@ -646,21 +857,13 @@ export class AppStore extends StoreBase {
     const dollyCard = 'position:absolute;left:50%;top:55%;width:290px;height:400px;transform:translate(-50%,-50%) scale(' + [1, 0.93, 0.86][s.pullDepth] + ');transition:transform 1.1s cubic-bezier(.3,.7,.3,1);border:1px solid rgba(236,234,247,.25);border-radius:6px;background:rgba(16,14,27,.55)';
 
     const auraColors = ['rgba(226,100,84,.55)', 'rgba(228,135,105,.45)', 'rgba(196,160,124,.4)', 'rgba(172,178,148,.4)', 'rgba(160,182,152,.42)', 'rgba(143,191,175,.45)'];
-    const aura = auraColors[Math.min(s.chatStep, auraColors.length - 1)];
+    // The aura cools as intensity drops (setup rating → latest estimate/re-rate).
+    const calmDrop = s.intensity > 0 ? Math.max(0, Math.min(1, (s.intensity - s.lastIntensity) / s.intensity)) : 0;
+    const aura = auraColors[Math.min(auraColors.length - 1, Math.round(calmDrop * (auraColors.length - 1)))];
     const auraStyle = 'position:absolute;left:50%;top:34%;width:72px;height:44px;transform:translateX(-50%);border-radius:50%;filter:blur(15px);background:' + aura + ';transition:background 1.4s ease';
-    const calmPct = Math.min(88, 14 + s.chatStep * 15);
+    const calmPct = Math.min(88, 14 + Math.round(calmDrop * 74));
     const calmRef = (el) => { if (el) el.style.width = calmPct + '%'; };
     const chatRef = (el) => { if (el) el.scrollTop = el.scrollHeight; };
-    const quickSets = [
-      ["What's hurting right now?", 'What are you afraid of?', 'What do you need from me?'],
-      ["What's underneath that?", 'What are you afraid of?', 'What do you need from me?'],
-      ["You're allowed to feel this", "I'm here — I'm not leaving", 'You did nothing wrong'],
-      ['How are you feeling now?', "What's left in your body?"],
-      ['What can you do next time?', 'What do you know about yourself now?', 'How should we hold this?']
-    ];
-    // AI-suggested replies take over once the guide starts steering; scripted sets seed the start.
-    const quicks = (s.suggested && s.chatStep < 5 ? s.suggested : (quickSets[s.chatStep] || []))
-      .map(t => ({ t, tap: () => this.send(t) }));
 
     // ----- session path map (algorithmic for now) -----
     const liveMoments = this.classifyMoments(s.chat);
@@ -682,14 +885,20 @@ export class AppStore extends StoreBase {
     // ----- connections across sessions (algorithmic preview) -----
     const TH = this.threadsVals(s);
 
-    // belief self-check (stage 5)
-    const bl = (s.belief || '').toLowerCase();
-    const aboutOthers = /(they|them|he |she |people|everyone|my boss|others)/.test(bl);
-    const strong = /(i can|i know|i handle|i've|i am able|i will|i'm in charge|handle)/.test(bl);
+    // belief self-check (stage 5) — the AI's check wins while the wording it checked
+    // is untouched; the regex is the live/offline fallback.
     let beliefCheckText, beliefCheckColor;
-    if (aboutOthers) { beliefCheckText = 'This leans on other people. Can it live inside you instead?'; beliefCheckColor = '#D9A96B'; }
-    else if (strong) { beliefCheckText = 'Lives inside you — and it\'s strong. Keep it.'; beliefCheckColor = '#8FBFAF'; }
-    else { beliefCheckText = 'True and calm. Could it be stronger — what do you know you can do?'; beliefCheckColor = '#A5A1C2'; }
+    if (s.aiCheck && s.aiCheck.for === s.belief) {
+      beliefCheckText = s.aiCheck.text;
+      beliefCheckColor = s.aiCheck.kind === 'strong' ? '#8FBFAF' : s.aiCheck.kind === 'others' ? '#D9A96B' : '#A5A1C2';
+    } else {
+      const bl = (s.belief || '').toLowerCase();
+      const aboutOthers = /(they|them|he |she |people|everyone|my boss|others|они|людям|начальник|другие)/.test(bl);
+      const strong = /(i can|i know|i handle|i've|i am able|i will|i'm in charge|handle|я могу|я знаю|я справл|я умею)/.test(bl);
+      if (aboutOthers) { beliefCheckText = 'This leans on other people. Can it live inside you instead?'; beliefCheckColor = '#D9A96B'; }
+      else if (strong) { beliefCheckText = 'Lives inside you — and it\'s strong. Keep it.'; beliefCheckColor = '#8FBFAF'; }
+      else { beliefCheckText = 'True and calm. Could it be stronger — what do you know you can do?'; beliefCheckColor = '#A5A1C2'; }
+    }
     const beliefCheckStyle = 'margin-top:6px;padding-top:10px;border-top:1px solid rgba(58,55,82,.5);font-size:12px;line-height:1.45;color:' + beliefCheckColor;
 
     // ----- summary -----
@@ -854,16 +1063,36 @@ export class AppStore extends StoreBase {
       },
       canSee: () => this.setState({ stage: 4 }),
 
-      // stage 4
+      // stage 4 — mirror dialogue loop
       emoChip: s.emotion + ' · ' + s.intensity + '/10',
       auraStyle, calmRef, chatRef,
-      chat: s.chat, typing: s.typing, quicks,
-      chatInput: s.chatInput,
-      onChatInput: (e) => this.setState({ chatInput: e.target.value }),
-      onChatKey: (e) => { if (e.key === 'Enter') this.send(this.state.chatInput); },
-      sendNow: () => this.send(this.state.chatInput),
-      chatDone: s.chatStep >= 5 && !s.typing,
-      toBelief: () => { this.setState({ stage: 5 }); this.fetchBeliefs(); },
+      chat: s.chat, typing: s.typing,
+      phQuestion: s.loopPhase === 'question' && !s.parkOffer && !s.typing,
+      phAsking: s.loopPhase === 'asking',
+      phWait: s.loopPhase === 'wait_more',
+      phReport: s.loopPhase === 'awaiting_report',
+      phCheck: s.loopPhase === 'intensity_check',
+      phGrounding: s.loopPhase === 'grounding',
+      parkOffer: s.parkOffer,
+      proposedQ: s.proposedQ,
+      askAloud: () => this.askAloud(),
+      anotherQuestion: () => this.anotherQuestion(),
+      copySilent: () => this.copySilent(),
+      hasAnswer: () => this.setState({ loopPhase: 'awaiting_report' }),
+      report: s.report,
+      onReport: (e) => this.setState({ report: e.target.value }),
+      reportKey: (e) => { if (e.key === 'Enter') this.submitReport(this.state.report); },
+      sendReport: () => this.submitReport(this.state.report),
+      loopIntensity: Math.round(s.lastIntensity),
+      loopThumb: thumb(s.lastIntensity, 10),
+      loopDown: this.mkSlider('lastIntensity', 10, true),
+      confirmIntensity: () => this.confirmIntensity(),
+      parkNow: () => this.parkResolve('now'),
+      parkLater: () => this.parkResolve('later'),
+      groundExit: () => this.setState({ stage: 6 }),
+      groundCrisis: () => this.go('crisis'),
+      canFixate: s.exchangeCount >= 6 && s.loopPhase === 'question' && !s.parkOffer,
+      toFixation: () => this.finishLoop(false),
 
       // session path map
       figureShown: !s.mapOpen,
@@ -888,6 +1117,9 @@ export class AppStore extends StoreBase {
       beliefCheckText, beliefCheckStyle,
 
       // stage 5
+      oldBeliefText: s.oldBelief || 'The harsh belief underneath this moment.',
+      onOldBelief: (e) => this.setState({ oldBelief: e.target.value, oldBeliefEdited: true }),
+      calmerChip: 'Your copy feels calmer · ' + Math.round(s.lastIntensity) + '/10',
       belief: s.belief,
       onBelief: (e) => this.setState({ belief: e.target.value }),
       regen: () => {
@@ -912,6 +1144,7 @@ export class AppStore extends StoreBase {
       save: () => {
         const now = Date.now();
         const startedAt = s.startedAt || now - 60000;
+        const moments = this.classifyMoments(s.chat);
         const row = {
           id: s.sessionId || crypto.randomUUID(),
           started_at: new Date(startedAt).toISOString(),
@@ -921,12 +1154,21 @@ export class AppStore extends StoreBase {
           emotion: s.emotion,
           intensity: s.intensity,
           after_intensity: Math.round(s.after),
-          old_belief: this.OLD,
+          old_belief: s.oldBelief || null,
+          old_belief_source: s.oldBelief ? (s.oldBeliefEdited ? 'edited' : (s.safetyStopped ? 'inferred' : 'confirmed')) : null,
           belief: s.belief,
           shift: s.intensity + ' → ' + Math.round(s.after),
           chat: s.chat,
-          moments: this.classifyMoments(s.chat),
-          topics: s.topics
+          moments,
+          topics: s.topics,
+          intensity_checkpoints: s.intensityTrail.concat([{ i: Math.round(s.after), at: s.exchangeCount, source: 'self' }]),
+          outcome: s.safetyStopped ? 'safety_stopped' : (s.loopEnd === 'cap' ? 'partial' : 'completed'),
+          loop_stats: {
+            exchanges: s.exchangeCount,
+            silences: s.silenceTotal,
+            checks: s.intensityTrail.filter(p => p.source === 'self').length,
+            deepest_depth: moments.reduce((d, m) => Math.max(d, m.depth || 0), 0)
+          }
         };
         pushSession(row);
         this.setState({ sessions: [row].concat(s.sessions), screen: 'journal', filter: 'All' });

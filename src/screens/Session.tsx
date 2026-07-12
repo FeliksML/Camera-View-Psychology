@@ -256,8 +256,8 @@ export function Session() {
                       </div>
                     </div>
                   )}
-                  {v.chatDone && (
-                    <div onClick={v.toBelief} style={sx("margin:6px auto 12px;height:48px;max-width:280px;border-radius:99px;background:#E8A188;color:#1E1C33;display:flex;align-items:center;justify-content:center;font-size:15px;font-weight:600;cursor:pointer;animation:cvFadeUp .5s ease both")} className={pseudo('active', "transform:scale(.98)")}>Look at the belief beneath</div>
+                  {v.canFixate && (
+                    <div onClick={v.toFixation} style={sx("margin:6px auto 12px;height:40px;max-width:260px;border-radius:99px;border:1px solid #3A3752;color:#A5A1C2;display:flex;align-items:center;justify-content:center;font-size:13px;cursor:pointer;animation:cvFadeUp .5s ease both")} className={pseudo('hover', "border-color:#A5A1C2;color:#ECEAF7")}>Look at the belief beneath</div>
                   )}
                 </div>
                 <div style={sx("padding:0 22px 6px;display:flex;justify-content:flex-end")}>
@@ -271,25 +271,94 @@ export function Session() {
                     </div>
                   )}
                 </div>
-                <div style={sx("padding:0 22px 8px;display:flex;gap:8px;flex-wrap:wrap")}>
-                  {v.quicks.map((q: any, i: number) => (
-                    <div key={i} onClick={q.tap} style={sx("height:32px;padding:0 13px;border-radius:99px;border:1px solid #3A3752;display:flex;align-items:center;font-size:12.5px;color:#A5A1C2;cursor:pointer")} className={pseudo('hover', "border-color:#A5A1C2;color:#ECEAF7")}>{q.t}</div>
-                  ))}
-                </div>
-                <div style={sx("padding:6px 22px calc(30px + env(safe-area-inset-bottom, 0px));display:flex;align-items:center;gap:10px")}>
-                  <div style={sx("flex:1;position:relative")}>
-                    <input value={v.chatInput} onChange={v.onChatInput} onKeyDown={v.onChatKey} placeholder="Speak to your copy…" style={sx("width:100%;box-sizing:border-box;height:46px;border-radius:99px;background:rgba(38,36,64,.8);border:1px solid #3A3752;padding:0 44px 0 18px;color:#ECEAF7;font-family:Inter,sans-serif;font-size:14.5px;outline:none")} className={pseudo('focus', "border-color:rgba(232,161,136,.6)")} />
-                    <svg width="13" height="18" viewBox="0 0 15 20" style={sx("position:absolute;right:17px;top:14px;opacity:.55")}>
-                      <rect x="4.5" y="1" width="6" height="11" rx="3" fill="none" stroke="#A5A1C2" strokeWidth="1.2" />
-                      <path d="M1.5 9.5a6 6 0 0 0 12 0M7.5 15.5V19" fill="none" stroke="#A5A1C2" strokeWidth="1.2" strokeLinecap="round" />
-                    </svg>
+                {/* park offer — a side topic waits; open now or keep it for its own session */}
+                {v.parkOffer && (
+                  <div style={sx("padding:0 22px calc(30px + env(safe-area-inset-bottom, 0px))")}>
+                    <div style={sx("background:rgba(38,36,64,.75);border:1px dashed rgba(143,191,175,.5);border-radius:20px;padding:14px 18px;font-family:Lora,serif;font-size:15.5px;line-height:1.5;color:#D9D6EA")}>Something else surfaced along the way. Open it now — or keep it for its own session?</div>
+                    <div style={sx("display:flex;gap:10px;margin-top:12px")}>
+                      <div onClick={v.parkNow} style={sx("flex:1;height:46px;border-radius:99px;border:1px solid #8FBFAF;color:#8FBFAF;display:flex;align-items:center;justify-content:center;font-size:13.5px;font-weight:500;cursor:pointer")} className={pseudo('hover', "background:rgba(143,191,175,.1)")}>Open it now</div>
+                      <div onClick={v.parkLater} style={sx("flex:1;height:46px;border-radius:99px;background:#E8A188;color:#1E1C33;display:flex;align-items:center;justify-content:center;font-size:13.5px;font-weight:600;cursor:pointer")} className={pseudo('active', "transform:scale(.98)")}>Next session</div>
+                    </div>
                   </div>
-                  <div onClick={v.sendNow} style={sx("width:46px;height:46px;border-radius:50%;background:#E8A188;display:flex;align-items:center;justify-content:center;cursor:pointer;flex:none")} className={pseudo('active', "transform:scale(.94)")}>
-                    <svg width="15" height="15" viewBox="0 0 15 15">
-                      <path d="M2 7.5h10M8 3l4.5 4.5L8 12" fill="none" stroke="#1E1C33" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" />
-                    </svg>
+                )}
+                {/* question card — the guide proposes, the user asks it aloud */}
+                {v.phQuestion && (
+                  <div style={sx("padding:0 22px calc(30px + env(safe-area-inset-bottom, 0px))")}>
+                    <div style={sx("background:rgba(38,36,64,.85);border:1px solid rgba(232,161,136,.55);border-radius:20px;padding:14px 18px;box-shadow:0 0 24px rgba(232,161,136,.1)")}>
+                      <div style={sx("font-size:10px;letter-spacing:.16em;color:#E8A188")}>ASK YOUR COPY</div>
+                      <div style={sx("font-family:Lora,serif;font-size:18px;line-height:1.45;color:#ECEAF7;margin-top:7px")}>{v.proposedQ}</div>
+                    </div>
+                    <div style={sx("display:flex;gap:10px;margin-top:12px")}>
+                      <div onClick={v.askAloud} style={sx("flex:1.2;height:48px;border-radius:99px;background:#E8A188;color:#1E1C33;display:flex;align-items:center;justify-content:center;font-size:14.5px;font-weight:600;cursor:pointer")} className={pseudo('active', "transform:scale(.98)")}>Ask it out loud</div>
+                      <div onClick={v.anotherQuestion} style={sx("flex:1;height:48px;border-radius:99px;border:1px solid #3A3752;color:#A5A1C2;display:flex;align-items:center;justify-content:center;font-size:13.5px;cursor:pointer")} className={pseudo('hover', "border-color:#A5A1C2;color:#ECEAF7")}>Another question</div>
+                    </div>
                   </div>
-                </div>
+                )}
+                {/* observation pause — asked aloud, now watch and listen */}
+                {v.phAsking && (
+                  <div style={sx("padding:0 22px calc(30px + env(safe-area-inset-bottom, 0px));display:flex;flex-direction:column;align-items:center")}>
+                    <div style={sx("position:relative;width:88px;height:88px;animation:cvBreathe 10s ease-in-out infinite")}>
+                      <div style={sx("position:absolute;inset:0;border-radius:50%;background:radial-gradient(circle,rgba(165,161,194,.28) 0%,rgba(165,161,194,.1) 55%,transparent 72%)")} />
+                      <div style={sx("position:absolute;inset:12px;border-radius:50%;background:radial-gradient(circle,rgba(236,234,247,.16),rgba(165,161,194,.06) 70%);box-shadow:0 0 24px rgba(232,161,136,.3)")} />
+                    </div>
+                    <div style={sx("font-size:12.5px;color:#A5A1C2;text-align:center;margin-top:8px")}>Hold their gaze — and listen. No rush.</div>
+                    <div style={sx("display:flex;gap:10px;margin-top:12px;width:100%")}>
+                      <div onClick={v.hasAnswer} style={sx("flex:1.2;height:48px;border-radius:99px;background:#E8A188;color:#1E1C33;display:flex;align-items:center;justify-content:center;font-size:14.5px;font-weight:600;cursor:pointer")} className={pseudo('active', "transform:scale(.98)")}>They answered</div>
+                      <div onClick={v.copySilent} style={sx("flex:1;height:48px;border-radius:99px;border:1px solid #3A3752;color:#A5A1C2;display:flex;align-items:center;justify-content:center;font-size:13.5px;cursor:pointer")} className={pseudo('hover', "border-color:#A5A1C2;color:#ECEAF7")}>The copy is silent</div>
+                    </div>
+                  </div>
+                )}
+                {/* wait_more — silence is normal; keep watching */}
+                {v.phWait && (
+                  <div style={sx("padding:0 22px calc(30px + env(safe-area-inset-bottom, 0px));display:flex;gap:10px")}>
+                    <div onClick={v.hasAnswer} style={sx("flex:1.2;height:48px;border-radius:99px;background:#E8A188;color:#1E1C33;display:flex;align-items:center;justify-content:center;font-size:14.5px;font-weight:600;cursor:pointer")} className={pseudo('active', "transform:scale(.98)")}>They answered</div>
+                    <div onClick={v.copySilent} style={sx("flex:1;height:48px;border-radius:99px;border:1px solid #3A3752;color:#A5A1C2;display:flex;align-items:center;justify-content:center;font-size:13.5px;cursor:pointer")} className={pseudo('hover', "border-color:#A5A1C2;color:#ECEAF7")}>Still silent</div>
+                  </div>
+                )}
+                {/* report — what did the copy say */}
+                {v.phReport && (
+                  <div style={sx("padding:6px 22px calc(30px + env(safe-area-inset-bottom, 0px));display:flex;align-items:center;gap:10px")}>
+                    <div style={sx("flex:1;position:relative")}>
+                      <input value={v.report} onChange={v.onReport} onKeyDown={v.reportKey} placeholder="What did your copy say?" style={sx("width:100%;box-sizing:border-box;height:46px;border-radius:99px;background:rgba(38,36,64,.8);border:1px solid #3A3752;padding:0 44px 0 18px;color:#ECEAF7;font-family:Inter,sans-serif;font-size:14.5px;outline:none")} className={pseudo('focus', "border-color:rgba(232,161,136,.6)")} />
+                      <svg width="13" height="18" viewBox="0 0 15 20" style={sx("position:absolute;right:17px;top:14px;opacity:.55")}>
+                        <rect x="4.5" y="1" width="6" height="11" rx="3" fill="none" stroke="#A5A1C2" strokeWidth="1.2" />
+                        <path d="M1.5 9.5a6 6 0 0 0 12 0M7.5 15.5V19" fill="none" stroke="#A5A1C2" strokeWidth="1.2" strokeLinecap="round" />
+                      </svg>
+                    </div>
+                    <div onClick={v.sendReport} style={sx("width:46px;height:46px;border-radius:50%;background:#E8A188;display:flex;align-items:center;justify-content:center;cursor:pointer;flex:none")} className={pseudo('active', "transform:scale(.94)")}>
+                      <svg width="15" height="15" viewBox="0 0 15 15">
+                        <path d="M2 7.5h10M8 3l4.5 4.5L8 12" fill="none" stroke="#1E1C33" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" />
+                      </svg>
+                    </div>
+                  </div>
+                )}
+                {/* intensity re-check */}
+                {v.phCheck && (
+                  <div style={sx("padding:0 22px calc(30px + env(safe-area-inset-bottom, 0px))")}>
+                    <div style={sx("text-align:center;font-size:10.5px;letter-spacing:.16em;color:#6B678C")}>HOW STRONG IS THE FEELING NOW?</div>
+                    <div onPointerDown={v.loopDown} style={sx("position:relative;height:44px;cursor:pointer;touch-action:none;margin-top:8px")}>
+                      <div style={sx("position:absolute;left:0;right:0;top:19px;height:6px;border-radius:99px;background:linear-gradient(90deg,#8FBFAF 0%,#C9A38C 55%,#D9755A 100%)")} />
+                      <div style={sx(v.loopThumb)}>{v.loopIntensity}</div>
+                    </div>
+                    <div onClick={v.confirmIntensity} style={sx("margin-top:12px;height:48px;border-radius:99px;background:#E8A188;color:#1E1C33;display:flex;align-items:center;justify-content:center;font-size:14.5px;font-weight:600;cursor:pointer")} className={pseudo('active', "transform:scale(.98)")}>Done</div>
+                  </div>
+                )}
+                {/* grounding — safety exit: breathe, then close or get help */}
+                {v.phGrounding && (
+                  <div style={sx("padding:0 22px calc(30px + env(safe-area-inset-bottom, 0px))")}>
+                    <div style={sx("display:flex;flex-direction:column;align-items:center")}>
+                      <div style={sx("position:relative;width:88px;height:88px;animation:cvBreathe 10s ease-in-out infinite")}>
+                        <div style={sx("position:absolute;inset:0;border-radius:50%;background:radial-gradient(circle,rgba(143,191,175,.3) 0%,rgba(143,191,175,.1) 55%,transparent 72%)")} />
+                        <div style={sx("position:absolute;inset:12px;border-radius:50%;background:radial-gradient(circle,rgba(236,234,247,.16),rgba(143,191,175,.08) 70%);box-shadow:0 0 24px rgba(143,191,175,.35)")} />
+                      </div>
+                      <div style={sx("font-size:12.5px;color:#A5A1C2;text-align:center;margin-top:8px")}>Slow breath out. Feet on the floor.</div>
+                    </div>
+                    <div style={sx("display:flex;gap:10px;margin-top:12px")}>
+                      <div onClick={v.groundExit} style={sx("flex:1.4;height:48px;border-radius:99px;background:#8FBFAF;color:#1E1C33;display:flex;align-items:center;justify-content:center;font-size:13.5px;font-weight:600;cursor:pointer")} className={pseudo('active', "transform:scale(.98)")}>I'm steadier — close the session</div>
+                      <div onClick={v.groundCrisis} style={sx("flex:1;height:48px;border-radius:99px;border:1px solid #D9755A;color:#D9755A;display:flex;align-items:center;justify-content:center;font-size:13.5px;cursor:pointer")} className={pseudo('hover', "background:rgba(217,117,90,.08)")}>Crisis support</div>
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
           )}
@@ -306,7 +375,7 @@ export function Session() {
                     </svg>
                   </div>
                 </div>
-                <div style={sx("height:26px;padding:0 12px;border-radius:99px;border:1px solid rgba(143,191,175,.5);background:rgba(143,191,175,.08);display:flex;align-items:center;font-size:11.5px;color:#8FBFAF")}>Your copy feels calmer · 3/10</div>
+                <div style={sx("height:26px;padding:0 12px;border-radius:99px;border:1px solid rgba(143,191,175,.5);background:rgba(143,191,175,.08);display:flex;align-items:center;font-size:11.5px;color:#8FBFAF")}>{v.calmerChip}</div>
               </div>
               <div style={sx("margin-top:20px;background:rgba(30,28,48,.7);border:1px solid rgba(58,55,82,.6);border-radius:20px;padding:16px 20px;opacity:.75")}>
                 <div style={sx("display:flex;align-items:center;gap:8px;font-size:11px;letter-spacing:.14em;color:#6B678C")}>
@@ -316,7 +385,8 @@ export function Session() {
                   </svg>
                   {" THE OLD BELIEF "}
                 </div>
-                <div style={sx("font-family:Lora,serif;font-size:19px;line-height:1.45;color:#A5A1C2;text-decoration:line-through;text-decoration-color:rgba(165,161,194,.5);margin-top:9px")}>If I get criticized, it means I'm worthless.</div>
+                <textarea value={v.oldBeliefText} onChange={v.onOldBelief} rows={2} style={sx("width:100%;box-sizing:border-box;background:transparent;border:none;outline:none;resize:none;font-family:Lora,serif;font-size:19px;line-height:1.45;color:#A5A1C2;text-decoration:line-through;text-decoration-color:rgba(165,161,194,.5);margin-top:9px")} />
+                <div style={sx("font-size:10.5px;color:#4E4A6E;margin-top:2px")}>Heard in the dialogue — fix the wording if it's off.</div>
               </div>
               <div style={sx("display:flex;flex-direction:column;align-items:center;gap:2px;padding:10px 0")}>
                 <svg width="12" height="7" viewBox="0 0 12 7" style={sx("opacity:.9")}>

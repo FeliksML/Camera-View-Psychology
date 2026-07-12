@@ -37,7 +37,7 @@ export function Summary() {
               </div>
               <div style={sx("padding:16px 20px;border-bottom:1px solid rgba(58,55,82,.6)")}>
                 <div style={sx("font-size:12.5px;color:#A5A1C2")}>Old belief</div>
-                <div style={sx("font-size:13.5px;color:#6B678C;text-decoration:line-through;margin-top:6px")}>If I get criticized, I'm worthless</div>
+                <div style={sx("font-size:13.5px;color:#6B678C;text-decoration:line-through;margin-top:6px")}>{v.oldBeliefText}</div>
               </div>
               <div style={sx("padding:16px 20px;display:flex;gap:12px;align-items:flex-start")}>
                 <div style={sx("flex:1")}>
