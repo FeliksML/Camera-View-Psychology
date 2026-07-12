@@ -8,6 +8,7 @@
 // reconnect. Profile/settings are last-write-wins with a debounce.
 import { createClient } from '@supabase/supabase-js'
 import type { SupabaseClient } from '@supabase/supabase-js'
+import { Capacitor } from '@capacitor/core'
 
 const CACHE_KEY = 'cv:v1:cache'
 
@@ -16,8 +17,14 @@ export const MOCK = import.meta.env.VITE_MOCK_AUTH === '1'
 const url = import.meta.env.VITE_SUPABASE_URL as string | undefined
 const anonKey = import.meta.env.VITE_SUPABASE_ANON_KEY as string | undefined
 
+// PKCE so the OAuth code can come back via a deep link on iOS (and a plain
+// redirect on the web); detectSessionInUrl auto-exchanges the web callback.
 export const supabase: SupabaseClient | null =
-  url && anonKey ? createClient(url, anonKey, { auth: { persistSession: true, autoRefreshToken: true } }) : null
+  url && anonKey
+    ? createClient(url, anonKey, {
+        auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true, flowType: 'pkce' },
+      })
+    : null
 
 // Dev-only console handle for debugging auth/sync (not shipped in prod builds)
 if (import.meta.env.DEV && typeof window !== 'undefined') {
@@ -143,6 +150,58 @@ export async function signOutRemote(): Promise<void> {
   } catch {
     /* token may already be dead — local clear is what matters */
   }
+}
+
+// ── OAuth (Apple / Google) ──────────────────────────────────────────────
+
+// Registered in Info.plist (CFBundleURLTypes) and in the Supabase dashboard
+// redirect allowlist. On iOS the OAuth pages open in SFSafariViewController
+// (Google forbids embedded webviews) and come back through this deep link.
+const NATIVE_REDIRECT = 'cameraview://auth-callback'
+
+export async function signInWithProvider(provider: 'apple' | 'google'): Promise<{ error?: string }> {
+  if (MOCK || !supabase) return {}
+  const native = Capacitor.isNativePlatform()
+  const { data, error } = await supabase.auth.signInWithOAuth({
+    provider,
+    options: {
+      redirectTo: native ? NATIVE_REDIRECT : window.location.origin,
+      skipBrowserRedirect: native,
+    },
+  })
+  if (error) return { error: error.message }
+  if (native && data?.url) {
+    const { Browser } = await import('@capacitor/browser')
+    await Browser.open({ url: data.url })
+  }
+  return {}
+}
+
+/** Exchange the PKCE code from the deep-link callback for a session. */
+export async function handleAuthCallback(callbackUrl: string): Promise<boolean> {
+  if (!supabase) return false
+  let code: string | null = null
+  try {
+    code = new URL(callbackUrl).searchParams.get('code')
+  } catch {
+    return false
+  }
+  if (!code) return false
+  try {
+    const { Browser } = await import('@capacitor/browser')
+    await Browser.close()
+  } catch {
+    /* browser sheet may already be gone */
+  }
+  const { error } = await supabase.auth.exchangeCodeForSession(code)
+  return !error
+}
+
+/** Fires on real sign-ins (OAuth redirect, deep link, OTP) — not on restores. */
+export function onAuthChange(cb: () => void): void {
+  supabase?.auth.onAuthStateChange((event) => {
+    if (event === 'SIGNED_IN') cb()
+  })
 }
 
 // ── sync ────────────────────────────────────────────────────────────────

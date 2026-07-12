@@ -19,6 +19,8 @@ import {
   sendOtp,
   verifyOtp,
   signOutRemote,
+  signInWithProvider,
+  onAuthChange,
   callFn,
 } from './storage'
 
@@ -133,6 +135,9 @@ export class AppStore extends StoreBase {
     }, 1000);
     this.onOnline = () => flushQueue();
     window.addEventListener('online', this.onOnline);
+    // Completes OAuth sign-ins (web redirect back / iOS deep link). The OTP path
+    // finishes itself in authVerify — the guards in finishOAuth keep this a no-op there.
+    onAuthChange(() => this.finishOAuth());
     this.boot();
   }
   componentWillUnmount() {
@@ -216,6 +221,29 @@ export class AppStore extends StoreBase {
     flushQueue();
   }
 
+  async oauth(provider) {
+    if (MOCK) { this.markOnboarded(); this.go('home'); this.showToast('Signed in (dev mock)'); return; }
+    this.setState({ authErr: '' });
+    const { error } = await signInWithProvider(provider);
+    if (error) this.setState({ authErr: error });
+    // Success continues elsewhere: the web page redirects away; on iOS the
+    // browser sheet opens and finishOAuth() runs after the deep link returns.
+  }
+  async finishOAuth() {
+    if (this.state.authed || this.state.authBusy) return;
+    const h = await hydrate();
+    if (!h) return;
+    const onboarded = h.onboarded;
+    this.setState({
+      authed: true, authMode: 'buttons', authCode: '', authErr: '',
+      userId: h.userId, displayName: h.displayName, email: h.email,
+      onboarded: h.onboarded, sessions: h.sessions || [], threads: h.threads || null,
+    });
+    if (!onboarded) this.markOnboarded();
+    this.go('home');
+    this.showToast('Signed in.');
+    flushQueue();
+  }
   signOut() {
     signOutRemote();
     clearCache();
@@ -992,8 +1020,8 @@ export class AppStore extends StoreBase {
       onAuthCode: (e) => this.setState({ authCode: e.target.value.replace(/\D/g, '').slice(0, 6), authErr: '' }),
       authEmailKey: (e) => { if (e.key === 'Enter') this.authSend(); },
       authCodeKey: (e) => { if (e.key === 'Enter') this.authVerify(); },
-      signIn: () => this.showToast('Sign in with Apple is coming soon — use email.'),
-      signInGoogle: () => this.showToast('Google sign-in is coming soon — use email.'),
+      signIn: () => this.oauth('apple'),
+      signInGoogle: () => this.oauth('google'),
       signInEmail: () => {
         if (MOCK) { this.markOnboarded(); this.go('home'); this.showToast('Signed in (dev mock)'); return; }
         this.setState({ authMode: 'email', authErr: '' });
