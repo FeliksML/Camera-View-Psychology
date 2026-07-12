@@ -7,6 +7,9 @@ export type Vals = ReturnType<AppStore['renderVals']>
 
 const Ctx = createContext<Vals | null>(null)
 
+/** Singleton handle for non-React consumers (native glue). Set by AppProvider. */
+export const appStoreRef: { current: AppStore | null } = { current: null }
+
 export function AppProvider({
   appProps,
   children,
@@ -15,7 +18,10 @@ export function AppProvider({
   children: ReactNode
 }) {
   const storeRef = useRef<AppStore | null>(null)
-  if (!storeRef.current) storeRef.current = new AppStore(appProps)
+  if (!storeRef.current) {
+    storeRef.current = new AppStore(appProps)
+    appStoreRef.current = storeRef.current
+  }
   const store = storeRef.current
 
   useSyncExternalStore(store.subscribe, store.getSnapshot)

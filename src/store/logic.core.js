@@ -1,7 +1,27 @@
-// PORTED 1:1 from design/CameraView Prototype.dc.html <script data-dc-script>.
-// Only the class header changed (Component/DCLogic -> AppStore/StoreBase).
-// Keep byte-faithful to the design; fidelity fixes belong in the design file first.
+// PRODUCTIZED from design/CameraView Prototype.dc.html <script data-dc-script>.
+// No longer byte-synced with the design file (that contract ended with product v1):
+// real auth (Supabase email OTP), persisted sessions/settings, Claude-powered
+// guide/belief/threads via edge functions, real dates & stats, crisis deep links,
+// TTS guide voice. The scripted COPY_SAYS/COACH engine remains as the offline
+// fallback. Visual bindings keep the design's names and CSS-string style.
 import { StoreBase } from './StoreBase'
+import {
+  MOCK,
+  loadCache,
+  saveCache,
+  clearCache,
+  hydrate,
+  pushSession,
+  flushQueue,
+  saveProfileDebounced,
+  sendOtp,
+  verifyOtp,
+  signOutRemote,
+  callFn,
+} from './storage'
+
+const fmtDate = (iso) => new Date(iso).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+const dayKey = (iso) => new Date(iso).toISOString().slice(0, 10)
 
 export class AppStore extends StoreBase {
   constructor(props) {
@@ -38,21 +58,27 @@ export class AppStore extends StoreBase {
   }
 
   freshState() {
+    const c = loadCache();
+    const st = c.settings || {};
     return {
-      screen: 'onb', onb: 0, paywall: false, plan: 'yearly', plus: false, toast: '',
+      screen: c.authed ? (c.onboarded ? 'home' : 'onb') : 'onb',
+      onb: 0, paywall: false, plan: 'yearly', plus: true, toast: '',
+      authed: c.authed, userId: c.userId, displayName: c.displayName, email: c.email, onboarded: c.onboarded,
+      authMode: 'buttons', authEmail: '', authCode: '', authBusy: false, authErr: '',
       situation: '', emotion: 'Anxiety', intensity: 7,
-      stage: 1, voiceOn: true, playing: false, audioT: 80,
+      stage: 1, voiceOn: st.voiceOn !== undefined ? st.voiceOn : true, playing: false, audioT: 80,
       pullDepth: 0,
       chat: [{ g: true, u: false, c: false, t: "Look at them standing there. Don't rush to calm them — let them speak first. Ask your copy a question: what is happening for them right now?" }],
       chatStep: 0, redir: 0, chatInput: '', typing: false,
       draftI: 0, belief: "Criticism stings, but it doesn't define my worth.",
+      aiDrafts: null, suggested: null,
       after: 3, remind: false, filter: 'All',
-      journal: [
-        { tag: 'Anxiety', date: 'Jul 9', dur: '14 min', belief: 'I handle hard moments better than I think.', shift: '6 → 2' },
-        { tag: 'Anger', date: 'Jul 5', dur: '11 min', belief: 'Anger is a signal, not a command.', shift: '7 → 3' },
-        { tag: 'Sadness', date: 'Jul 2', dur: '16 min', belief: 'Missing them means the love was real.', shift: '5 → 2' }
-      ],
-      voiceSpeed: 0.5, haptics: true, transcripts: false,
+      sessions: c.sessions || [],
+      threads: c.threads, threadsBusy: false,
+      voiceSpeed: st.voiceSpeed !== undefined ? st.voiceSpeed : 0.5,
+      haptics: st.haptics !== undefined ? st.haptics : true,
+      transcripts: st.transcripts !== undefined ? st.transcripts : false,
+      startedAt: null, sessionId: null,
       topics: [], topicOpen: false, topicText: '', mapOpen: false, thSel: 1
     };
   }
@@ -65,21 +91,116 @@ export class AppStore extends StoreBase {
         this.setState({ audioT: t, playing: t < 160 });
       }
     }, 1000);
+    this.onOnline = () => flushQueue();
+    window.addEventListener('online', this.onOnline);
+    this.boot();
   }
-  componentWillUnmount() { clearInterval(this.timer); clearTimeout(this.tt); clearTimeout(this.ct); }
+  componentWillUnmount() {
+    clearInterval(this.timer); clearTimeout(this.tt); clearTimeout(this.ct);
+    window.removeEventListener('online', this.onOnline);
+    try { window.speechSynthesis && speechSynthesis.cancel(); } catch { /* no tts */ }
+  }
+
+  async boot() {
+    if (MOCK) return;
+    const h = await hydrate();
+    if (h) {
+      const st = h.settings || {};
+      const patch = {
+        authed: true, userId: h.userId, displayName: h.displayName, email: h.email,
+        onboarded: h.onboarded, sessions: h.sessions || [], threads: h.threads || this.state.threads,
+      };
+      if (st.voiceOn !== undefined) patch.voiceOn = st.voiceOn;
+      if (st.voiceSpeed !== undefined) patch.voiceSpeed = st.voiceSpeed;
+      if (st.haptics !== undefined) patch.haptics = st.haptics;
+      if (st.transcripts !== undefined) patch.transcripts = st.transcripts;
+      if ((this.state.screen === 'onb' || this.state.screen === 'signin') && h.onboarded) patch.screen = 'home';
+      this.setState(patch);
+    } else if (this.state.authed) {
+      // cached session is stale — ask to sign in again, keep local data visible
+      saveCache({ authed: false, userId: null });
+      this.setState({ authed: false, screen: 'signin' });
+    }
+    flushQueue();
+  }
+
+  speak(text) {
+    try {
+      if (!this.state.voiceOn || !window.speechSynthesis || !text) return;
+      const u = new SpeechSynthesisUtterance(text);
+      u.rate = 0.75 + this.state.voiceSpeed * 0.55;
+      speechSynthesis.cancel();
+      speechSynthesis.speak(u);
+    } catch { /* tts unavailable */ }
+  }
+
+  persistSettings() {
+    const { voiceOn, voiceSpeed, haptics, transcripts } = this.state;
+    saveProfileDebounced({ settings: { voiceOn, voiceSpeed, haptics, transcripts } });
+  }
+
+  markOnboarded() {
+    if (!this.state.onboarded) {
+      this.setState({ onboarded: true });
+      saveProfileDebounced({ onboarded: true });
+    }
+  }
+
+  async authSend() {
+    const email = (this.state.authEmail || '').trim();
+    if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) { this.setState({ authErr: 'That email doesn’t look right.' }); return; }
+    this.setState({ authBusy: true, authErr: '' });
+    const { error } = await sendOtp(email);
+    if (error) { this.setState({ authBusy: false, authErr: error }); return; }
+    this.setState({ authBusy: false, authMode: 'code', authCode: '' });
+    this.showToast('Code sent — check your email.');
+  }
+
+  async authVerify() {
+    const { authEmail, authCode } = this.state;
+    if ((authCode || '').length < 6) { this.setState({ authErr: 'Enter the 6-digit code.' }); return; }
+    this.setState({ authBusy: true, authErr: '' });
+    const { error } = await verifyOtp(authEmail.trim(), authCode);
+    if (error) { this.setState({ authBusy: false, authErr: error }); return; }
+    const h = await hydrate();
+    const onboarded = h ? h.onboarded : false;
+    this.setState(Object.assign({
+      authBusy: false, authed: true, authMode: 'buttons', authCode: '',
+    }, h ? {
+      userId: h.userId, displayName: h.displayName, email: h.email,
+      onboarded: h.onboarded, sessions: h.sessions || [], threads: h.threads || null,
+    } : {}));
+    if (!onboarded) this.markOnboarded();
+    this.go('home');
+    this.showToast('Signed in.');
+    flushQueue();
+  }
+
+  signOut() {
+    signOutRemote();
+    clearCache();
+    this.setState(Object.assign(this.freshState(), { screen: 'signin', authed: false }));
+    this.showToast('Signed out.');
+  }
 
   showToast(m) {
     clearTimeout(this.tt);
     this.setState({ toast: m });
     this.tt = setTimeout(() => this.setState({ toast: '' }), 2600);
   }
-  go(screen, extra) { this.setState(Object.assign({ screen, paywall: false }, extra || {})); }
+  go(screen, extra) {
+    try { window.speechSynthesis && speechSynthesis.cancel(); } catch { /* no tts */ }
+    this.setState(Object.assign({ screen, paywall: false }, extra || {}));
+  }
   startSession() {
     this.setState({
       screen: 'session', stage: 1, pullDepth: 0, playing: false, audioT: 80,
       chat: [{ g: true, u: false, c: false, t: "Look at them standing there. Don't rush to calm them — let them speak first. Ask your copy a question: what is happening for them right now?" }],
-      chatStep: 0, redir: 0, chatInput: '', typing: false, after: 3, draftI: 0, belief: this.DRAFTS[0], mapOpen: false
+      chatStep: 0, redir: 0, chatInput: '', typing: false, after: 3, draftI: 0, belief: this.DRAFTS[0], mapOpen: false,
+      aiDrafts: null, suggested: null, topics: [], remind: false,
+      startedAt: Date.now(), sessionId: crypto.randomUUID()
     });
+    this.speak("Let's arrive first. Three slow breaths — just follow the circle.");
   }
   send(text) {
     const t = (text || '').trim();
@@ -87,11 +208,33 @@ export class AppStore extends StoreBase {
     const step = this.state.chatStep;
     const isQ = /\?/.test(t) || /^(what|why|how|where|when|who|do you|are you|can you|tell me)/i.test(t);
     this.setState(s => ({ chat: s.chat.concat([{ g: false, u: true, c: false, t }]), chatInput: '', typing: true }));
+    // Crisis backstop — instant and offline-safe; the AI's `risk` flag is the smarter net.
+    if (/(kill myself|suicid|self.?harm|end my life|не хочу жить|покончи|убить себя)/i.test(t)) {
+      this.setState({ typing: false });
+      this.go('crisis');
+      return;
+    }
+    const needsQ = step !== 2;
+    if (needsQ && !isQ && step < 2) {
+      // Instant coaching redirect (kept local: it's UX, not intelligence)
+      this.ct = setTimeout(() => {
+        this.setState(s => ({
+          chat: s.chat.concat([{ g: true, u: false, c: false, t: this.REDIRECT[s.redir % this.REDIRECT.length] }]),
+          redir: s.redir + 1, typing: false
+        }));
+      }, 1100);
+      return;
+    }
+    if (navigator.onLine === false) { this.sendScripted(step, isQ); return; }
+    this.sendAI(step, isQ);
+  }
+  // The design's original scripted engine — now the offline/error fallback.
+  sendScripted(step, isQ) {
     const needsQ = step !== 2;
     if (needsQ && !isQ) {
       this.ct = setTimeout(() => {
         this.setState(s => ({
-          chat: s.chat.concat([{ g: true, u: false, c: false, t: step < 2 ? this.REDIRECT[s.redir % this.REDIRECT.length] : this.ASK_REDIRECT }]),
+          chat: s.chat.concat([{ g: true, u: false, c: false, t: this.ASK_REDIRECT }]),
           redir: s.redir + 1, typing: false
         }));
       }, 1100);
@@ -100,12 +243,66 @@ export class AppStore extends StoreBase {
     this.ct = setTimeout(() => {
       this.setState(s => ({ chat: s.chat.concat([{ g: false, u: false, c: true, t: this.COPY_SAYS[step] }]) }));
       this.ct = setTimeout(() => {
+        const coach = this.COACH[step];
         this.setState(s => ({
-          chat: s.chat.concat([{ g: true, u: false, c: false, t: this.COACH[step] }]),
+          chat: s.chat.concat([{ g: true, u: false, c: false, t: coach }]),
           chatStep: s.chatStep + 1, typing: false
         }));
+        this.speak(coach);
       }, 1600);
     }, 1100);
+  }
+  async sendAI(step, isQ) {
+    const s0 = this.state;
+    const transcript = s0.chat.map(m => ({ who: m.g ? 'coach' : m.u ? 'you' : 'copy', text: m.t }));
+    const r = await callFn('guide', {
+      situation: s0.situation, emotion: s0.emotion, intensity: s0.intensity,
+      chatStep: step, transcript
+    });
+    if (!r || !r.copy_reply || !r.coach_note) { this.sendScripted(step, isQ); return; }
+    if (this.state.screen !== 'session') return; // user left mid-request
+    if (r.risk) { this.setState({ typing: false }); this.go('crisis'); return; }
+    // Staged reveal keeps the design's rhythm even though the reply is already here.
+    this.ct = setTimeout(() => {
+      this.setState(s => ({
+        chat: s.chat.concat([{ g: false, u: false, c: true, t: r.copy_reply, depth: r.depth, shift: r.shift }])
+      }));
+      this.ct = setTimeout(() => {
+        this.setState(s => ({
+          chat: s.chat.concat([{ g: true, u: false, c: false, t: r.coach_note }]),
+          chatStep: s.chatStep + (r.advance === false ? 0 : 1),
+          suggested: Array.isArray(r.suggested_replies) && r.suggested_replies.length ? r.suggested_replies.slice(0, 3) : null,
+          typing: false
+        }));
+        this.speak(r.coach_note);
+      }, 1600);
+    }, 1100);
+  }
+  async fetchBeliefs() {
+    const s0 = this.state;
+    const transcript = s0.chat.map(m => ({ who: m.g ? 'coach' : m.u ? 'you' : 'copy', text: m.t }));
+    const r = await callFn('belief', {
+      situation: s0.situation, emotion: s0.emotion, oldBelief: this.OLD,
+      currentBelief: s0.belief, transcript
+    });
+    if (r && Array.isArray(r.drafts) && r.drafts.length) {
+      this.setState({ aiDrafts: r.drafts.slice(0, 3), belief: r.drafts[0], draftI: 0 });
+    }
+  }
+  async loadThreads(force) {
+    const s = this.state;
+    if (s.threadsBusy) return;
+    const fresh = s.threads && s.threads.computed_at &&
+      (Date.now() - new Date(s.threads.computed_at).getTime()) < 6 * 3600 * 1000 &&
+      (s.threads.n_sessions || 0) === s.sessions.length;
+    if (fresh && !force) return;
+    this.setState({ threadsBusy: true });
+    const r = await callFn('threads', {});
+    this.setState({ threadsBusy: false });
+    if (r) {
+      this.setState({ threads: r });
+      saveCache({ threads: r });
+    }
   }
   saveTopic() {
     const t = (this.state.topicText || '').trim();
@@ -130,8 +327,10 @@ export class AppStore extends StoreBase {
         const q = /\?/.test(m.t) || /^(what|why|how|where|when|who|do you|are you|can you|tell me)/i.test(m.t);
         out.push({ who: 'you', kind: q ? 'q' : 'support', depth: 0, t: m.t });
       } else if (m.c) {
-        const d = this.depthOf(m.t);
-        out.push({ who: 'copy', kind: d > 0 ? 'memory' : (this.isShift(m.t) ? 'shift' : 'release'), depth: d, t: m.t });
+        // AI messages carry authoritative depth/shift; regex is the fallback.
+        const d = typeof m.depth === 'number' ? m.depth : this.depthOf(m.t);
+        const shifted = typeof m.shift === 'boolean' ? m.shift : this.isShift(m.t);
+        out.push({ who: 'copy', kind: d > 0 ? 'memory' : (shifted ? 'shift' : 'release'), depth: d, t: m.t });
       }
     });
     return out;
@@ -222,18 +421,25 @@ export class AppStore extends StoreBase {
   }
   threadsVals(s) {
     const E = this.ECOLORS, R1 = '#E8A188', R2 = '#D9A96B';
-    const SS = [
-      { n: 1, area: 'Work', emo: 'Anxiety', root: 1, depth: 3, t: 'Presentation torn apart', d: 'Jun 12' },
-      { n: 2, area: 'Work', emo: 'Anxiety', root: 1, depth: 1, t: "Boss CC'd everyone", d: 'Jun 16' },
-      { n: 3, area: 'Family', emo: 'Anger', root: 2, depth: 2, t: 'Talked over at dinner', d: 'Jun 19' },
-      { n: 4, area: 'Friends', emo: 'Sadness', root: 1, depth: 3, t: 'Left out of the trip', d: 'Jun 23' },
-      { n: 5, area: 'Self', emo: 'Shame', root: 0, depth: 1, t: 'Missed the gym again', d: 'Jun 26' },
-      { n: 6, area: 'Work', emo: 'Anger', root: 2, depth: 2, t: 'Idea credited to someone else', d: 'Jun 30' },
-      { n: 7, area: 'Friends', emo: 'Anxiety', root: 1, depth: 1, t: 'Unanswered message spiral', d: 'Jul 2' },
-      { n: 8, area: 'Family', emo: 'Resentment', root: 2, depth: 2, t: 'Holiday plans decided for me', d: 'Jul 5' },
-      { n: 9, area: 'Work', emo: 'Anxiety', root: 1, depth: 3, t: 'Quarterly review dread', d: 'Jul 8' },
-      { n: 10, area: 'Friends', emo: 'Sadness', root: 1, depth: 1, t: 'Joke that landed wrong', d: 'Jul 9' }
-    ];
+    const cacheData = s.threads || {};
+    const roots = Array.isArray(cacheData.roots) ? cacheData.roots.slice(0, 2) : [];
+    const nSessions = s.sessions.length;
+    const thEmpty = roots.length === 0;
+    const thEmptyText = s.threadsBusy
+      ? 'Connecting the threads…'
+      : nSessions < 5
+        ? 'A few more sessions and the threads will start to show. ' + nSessions + ' of 5 so far.'
+        : 'No shared roots surfaced yet — every session still stands on its own.';
+    const SS = thEmpty ? [] : (Array.isArray(cacheData.session_points) ? cacheData.session_points : [])
+      .map((p, i) => ({
+        n: p.n || i + 1,
+        area: p.area || 'Other',
+        emo: E[p.emo] ? p.emo : 'Other',
+        root: Math.min(p.root || 0, roots.length),
+        depth: typeof p.depth === 'number' ? p.depth : 1,
+        t: p.t || '',
+        d: p.d || ''
+      }));
     const dot = (x, y, c, r, ring) =>
       'position:absolute;left:' + (x - r).toFixed(1) + 'px;top:' + (y - r).toFixed(1) + 'px;width:' + (r * 2) + 'px;height:' + (r * 2) + 'px;border-radius:50%;background:' + c + ';box-shadow:0 0 9px ' + c + '77' + (ring ? ';outline:1.5px solid ' + ring + ';outline-offset:2px' : '');
     const lab = (x, y, c, mid) => 'position:absolute;left:' + x.toFixed(1) + 'px;top:' + y.toFixed(1) + 'px;' + (mid ? 'transform:translateX(-50%);' : '') + 'font-size:8.5px;letter-spacing:.08em;color:' + c + ';white-space:nowrap';
@@ -241,13 +447,24 @@ export class AppStore extends StoreBase {
     // A · constellation — sessions gather around a shared core belief
     const aC1 = [118, 200], aC2 = [272, 92];
     const aAng1 = [-90, -30, 30, 90, 150, 210], aAng2 = [-150, -20, 110];
-    const aDots = []; let aL1 = '', aL2 = ''; let i1 = 0, i2 = 0;
+    const aDots = []; let aL1 = '', aL2 = ''; let i1 = 0, i2 = 0, i0 = 0;
     const sel = s.thSel || 1;
     SS.forEach(ss => {
       let x, y;
-      if (ss.root === 1) { const a = aAng1[i1++] * Math.PI / 180; x = aC1[0] + 82 * Math.cos(a); y = aC1[1] + 82 * Math.sin(a); aL1 += 'M' + aC1[0] + ' ' + aC1[1] + 'L' + x.toFixed(0) + ' ' + y.toFixed(0); }
-      else if (ss.root === 2) { const a = aAng2[i2++] * Math.PI / 180; x = aC2[0] + 64 * Math.cos(a); y = aC2[1] + 64 * Math.sin(a); aL2 += 'M' + aC2[0] + ' ' + aC2[1] + 'L' + x.toFixed(0) + ' ' + y.toFixed(0); }
-      else { x = 322; y = 268; }
+      if (ss.root === 1) {
+        // reuse the base angles, spiralling outward slightly when a root has >6 sessions
+        const a = (aAng1[i1 % aAng1.length] + Math.floor(i1 / aAng1.length) * 17) * Math.PI / 180;
+        const rad = 82 + Math.floor(i1 / aAng1.length) * 14; i1++;
+        x = aC1[0] + rad * Math.cos(a); y = aC1[1] + rad * Math.sin(a);
+        aL1 += 'M' + aC1[0] + ' ' + aC1[1] + 'L' + x.toFixed(0) + ' ' + y.toFixed(0);
+      } else if (ss.root === 2) {
+        const a = (aAng2[i2 % aAng2.length] + Math.floor(i2 / aAng2.length) * 23) * Math.PI / 180;
+        const rad = 64 + Math.floor(i2 / aAng2.length) * 14; i2++;
+        x = aC2[0] + rad * Math.cos(a); y = aC2[1] + rad * Math.sin(a);
+        aL2 += 'M' + aC2[0] + ' ' + aC2[1] + 'L' + x.toFixed(0) + ' ' + y.toFixed(0);
+      } else {
+        x = 322 - (i0 % 3) * 16; y = 268 - Math.floor(i0 / 3) * 16; i0++;
+      }
       const r = ss.depth >= 3 ? 6 : (ss.depth === 2 ? 5 : 4);
       const on = ss.root === sel;
       aDots.push({
@@ -270,7 +487,16 @@ export class AppStore extends StoreBase {
     };
     const draw = (delay) => 'stroke-dasharray:520;stroke-dashoffset:520;animation:cvDraw 1.6s ease ' + delay + ' forwards';
 
+    const root1 = roots[0] || {};
+    const root2 = roots[1] || {};
+    const hasLoners = SS.some(x => x.root === 0);
     return {
+      thEmpty, thEmptyText, thHasRoots: !thEmpty, thHasRoot2: roots.length >= 2, thHasLoners: hasLoners,
+      thCountLine: nSessions + ' session' + (nSessions === 1 ? '' : 's') + ' · ' + roots.length + ' shared root' + (roots.length === 1 ? '' : 's') + ' surfaced',
+      thAge1: root1.age_label || '', thAge2: root2.age_label || '',
+      thPair1: root1.pair_label || '', thPair2: root2.pair_label || '',
+      thBelief1: '“' + (root1.belief || '') + '”', thBelief2: '“' + (root2.belief || '') + '”',
+      thNarr1: root1.narrative || '', thNarr2: root2.narrative || '',
       thaLines1: aL1, thaLines2: aL2, thaDots: aDots,
       thaStroke1: sel === 2 ? 'rgba(232,161,136,.12)' : 'rgba(232,161,136,.45)',
       thaStroke2: sel === 1 ? 'rgba(217,169,107,.12)' : 'rgba(217,169,107,.42)',
@@ -282,10 +508,10 @@ export class AppStore extends StoreBase {
       selRoot2: () => this.setState({ thSel: 2 }),
       rootCard1: card(R1, sel === 1, 16), rootCard2: card(R2, sel === 2, 12),
       thMems1: mems(1, 3), thMems2: mems(2, 3),
-      toThreads: () => this.go('threads'),
+      toThreads: () => { this.go('threads'); this.loadThreads(); },
       thBack: () => this.go('progress'),
-      rootSession1: () => { this.setState({ screen: 'setup', situation: "The root: I'm only worth what I deliver", paywall: false }); this.showToast('Session aimed at the root.'); },
-      rootSession2: () => { this.setState({ screen: 'setup', situation: 'The root: anger I learned to swallow', paywall: false }); this.showToast('Session aimed at the root.'); }
+      rootSession1: () => { this.setState({ screen: 'setup', situation: 'The root: ' + (root1.belief || ''), paywall: false }); this.showToast('Session aimed at the root.'); },
+      rootSession2: () => { this.setState({ screen: 'setup', situation: 'The root: ' + (root2.belief || ''), paywall: false }); this.showToast('Session aimed at the root.'); }
     };
   }
   mkSlider(key, max, round) {
@@ -308,8 +534,37 @@ export class AppStore extends StoreBase {
   renderVals() {
     const s = this.state;
     const P = this.props || {};
-    const plus = s.plus || !!P.plusMember;
-    const journal = P.journalEmpty ? [] : s.journal;
+    const plus = true; // personal build: Plus is always on; the paywall stays as a showcase
+    // Journal rows derive from stored sessions (newest first).
+    const journal = P.journalEmpty ? [] : s.sessions.map(row => ({
+      tag: row.emotion || 'Other',
+      date: row.started_at ? fmtDate(row.started_at) : '',
+      dur: (row.duration_min || 1) + ' min',
+      belief: row.belief || '',
+      shift: row.shift || ''
+    }));
+
+    // ----- real stats -----
+    const dayKeys = Array.from(new Set(s.sessions.map(r => r.started_at && dayKey(r.started_at)).filter(Boolean))).sort().reverse();
+    let streak = 0;
+    if (dayKeys.length) {
+      const today = dayKey(new Date().toISOString());
+      const yesterday = dayKey(new Date(Date.now() - 86400000).toISOString());
+      if (dayKeys[0] === today || dayKeys[0] === yesterday) {
+        streak = 1;
+        for (let i = 1; i < dayKeys.length; i++) {
+          const gap = (new Date(dayKeys[i - 1]).getTime() - new Date(dayKeys[i]).getTime()) / 86400000;
+          if (gap === 1) streak++; else break;
+        }
+      }
+    }
+    const drops = s.sessions
+      .filter(r => typeof r.intensity === 'number' && typeof r.after_intensity === 'number')
+      .map(r => r.intensity - r.after_intensity);
+    const avgDrop = drops.length ? drops.reduce((a, b) => a + b, 0) / drops.length : 0;
+    const calmShiftLabel = drops.length ? '−' + avgDrop.toFixed(1) : '—';
+    const monthAgo = Date.now() - 30 * 86400000;
+    const recent = s.sessions.filter(r => r.started_at && new Date(r.started_at).getTime() >= monthAgo);
 
     // ----- rail -----
     const railDef = [
@@ -329,7 +584,7 @@ export class AppStore extends StoreBase {
       ['head', 'APP'],
       ['12 Journal', () => this.go('journal')],
       ['13 Progress', () => this.go('progress')],
-      ['17 Connections ★', () => this.go('threads')],
+      ['17 Connections ★', () => { this.go('threads'); this.loadThreads(); }],
       ['14 Paywall', () => this.setState({ screen: 'home', paywall: true })],
       ['15 Settings', () => this.go('settings')],
       ['16 Crisis support', () => this.go('crisis')]
@@ -403,7 +658,9 @@ export class AppStore extends StoreBase {
       ['How are you feeling now?', "What's left in your body?"],
       ['What can you do next time?', 'What do you know about yourself now?', 'How should we hold this?']
     ];
-    const quicks = (quickSets[s.chatStep] || []).map(t => ({ t, tap: () => this.send(t) }));
+    // AI-suggested replies take over once the guide starts steering; scripted sets seed the start.
+    const quicks = (s.suggested && s.chatStep < 5 ? s.suggested : (quickSets[s.chatStep] || []))
+      .map(t => ({ t, tap: () => this.send(t) }));
 
     // ----- session path map (algorithmic for now) -----
     const liveMoments = this.classifyMoments(s.chat);
@@ -451,24 +708,33 @@ export class AppStore extends StoreBase {
         barStyle: 'position:absolute;left:8px;top:16px;bottom:16px;width:4px;border-radius:99px;background:' + c,
         tagStyle: 'height:22px;padding:0 10px;border-radius:99px;font-size:11px;display:flex;align-items:center;border:1px solid ' + c + '55;color:' + c + ';background:' + c + '14'
       });
-      if (i === 0 && s.filter === 'All') jRows.push({
-        ins: true, card: false, text: "You've calmed anxiety 4 times this month. It's getting faster — avg 3 min sooner.",
-        tag: '', date: '', dur: '', belief: '', shift: '', barStyle: '', tagStyle: ''
-      });
+      if (i === 0 && s.filter === 'All' && recent.length >= 3) {
+        const counts = {};
+        recent.forEach(r => { counts[r.emotion] = (counts[r.emotion] || 0) + 1; });
+        const top = Object.keys(counts).sort((a, b) => counts[b] - counts[a])[0];
+        jRows.push({
+          ins: true, card: false,
+          text: "You've calmed " + (top || '').toLowerCase() + ' ' + counts[top] + ' times this month. Average drop: ' + avgDrop.toFixed(1) + ' points.',
+          tag: '', date: '', dur: '', belief: '', shift: '', barStyle: '', tagStyle: ''
+        });
+      }
     });
 
-    // ----- progress -----
-    const beliefRows = [
-      { old: 'I always ruin things', neu: 'I handle hard moments better than I think.' },
-      { old: "If I get criticized, I'm worthless", neu: "Criticism stings, but it doesn't define my worth." },
-      { old: 'I have to stay angry to be heard', neu: 'Anger is a signal, not a command.' }
-    ];
-    const emoData = [['Anxiety', 6, '#E8A188'], ['Anger', 4, '#D9A96B'], ['Sadness', 2, '#8E9BB8']];
-    const emoSegs = emoData.map(d => ({
-      label: d[0], count: d[1],
-      style: 'flex:' + d[1] + ';border-radius:99px;background:' + d[2] + ';opacity:.85',
-      labelStyle: 'flex:' + d[1] + ';font-size:10.5px;color:#A5A1C2;white-space:nowrap;overflow:hidden'
+    // ----- progress (derived from stored sessions) -----
+    const beliefRows = s.sessions.slice(0, 3).map(r => ({
+      old: r.old_belief || '—',
+      neu: r.belief || ''
     }));
+    const emoCounts = {};
+    recent.forEach(r => { emoCounts[r.emotion || 'Other'] = (emoCounts[r.emotion || 'Other'] || 0) + 1; });
+    const emoSegs = Object.keys(emoCounts)
+      .sort((a, b) => emoCounts[b] - emoCounts[a])
+      .slice(0, 4)
+      .map(name => ({
+        label: name, count: emoCounts[name],
+        style: 'flex:' + emoCounts[name] + ';border-radius:99px;background:' + (this.ECOLORS[name] || '#A5A1C2') + ';opacity:.85',
+        labelStyle: 'flex:' + emoCounts[name] + ';font-size:10.5px;color:#A5A1C2;white-space:nowrap;overflow:hidden'
+      }));
 
     // ----- paywall -----
     const planCard = (sel) => 'position:relative;flex:1;border-radius:18px;padding:16px;box-sizing:border-box;cursor:pointer;transition:all .2s;' +
@@ -485,7 +751,7 @@ export class AppStore extends StoreBase {
     return {
       // rail / chrome
       railItems,
-      restart: () => this.setState(this.freshState()),
+      restart: () => this.setState(Object.assign(this.freshState(), { screen: 'onb', onb: 0 })),
       hasToast: !!s.toast, toastMsg: s.toast,
 
       // screen flags
@@ -500,17 +766,54 @@ export class AppStore extends StoreBase {
       onb0: s.onb === 0, onb1: s.onb === 1, onb2: s.onb === 2,
       onbTitle: onbData[s.onb].t, onbBody: onbData[s.onb].b, onbBtn: onbData[s.onb].btn,
       dot0: dot(0), dot1: dot(1), dot2: dot(2),
-      onbNext: () => { if (s.onb < 2) this.setState({ onb: s.onb + 1 }); else this.go('signin'); },
-      toSignin: () => this.go('signin'),
+      onbNext: () => {
+        if (s.onb < 2) this.setState({ onb: s.onb + 1 });
+        else if (s.authed) { this.markOnboarded(); this.go(s.onboarded ? 'setup' : 'home'); }
+        else this.go('signin');
+      },
+      toSignin: () => { if (s.authed) { this.markOnboarded(); this.go('home'); } else this.go('signin'); },
 
-      // sign in
-      signIn: () => { this.go('home'); this.showToast('Signed in privately'); },
+      // sign in — Supabase email OTP; Apple/Google are Phase 2
+      authButtons: s.authMode === 'buttons',
+      authEmailMode: s.authMode === 'email',
+      authCodeMode: s.authMode === 'code',
+      authEmail: s.authEmail, authCode: s.authCode, authBusy: s.authBusy, authErr: s.authErr,
+      hasAuthErr: !!s.authErr,
+      onAuthEmail: (e) => this.setState({ authEmail: e.target.value, authErr: '' }),
+      onAuthCode: (e) => this.setState({ authCode: e.target.value.replace(/\D/g, '').slice(0, 6), authErr: '' }),
+      authEmailKey: (e) => { if (e.key === 'Enter') this.authSend(); },
+      authCodeKey: (e) => { if (e.key === 'Enter') this.authVerify(); },
+      signIn: () => this.showToast('Sign in with Apple is coming soon — use email.'),
+      signInGoogle: () => this.showToast('Google sign-in is coming soon — use email.'),
+      signInEmail: () => {
+        if (MOCK) { this.markOnboarded(); this.go('home'); this.showToast('Signed in (dev mock)'); return; }
+        this.setState({ authMode: 'email', authErr: '' });
+      },
+      authBack: () => this.setState({ authMode: 'buttons', authErr: '', authCode: '' }),
+      authSend: () => this.authSend(),
+      authVerify: () => this.authVerify(),
+      authSendLabel: s.authBusy ? 'Sending…' : 'Send code',
+      authVerifyLabel: s.authBusy ? 'Verifying…' : 'Verify & continue',
 
       // home
+      greeting: (() => {
+        const h = new Date().getHours();
+        const part = h < 6 ? 'Good night' : h < 12 ? 'Good morning' : h < 18 ? 'Good afternoon' : 'Good evening';
+        return s.displayName ? part + ', ' + s.displayName : part;
+      })(),
+      avatarLetter: (s.displayName || s.email || 'Y')[0].toUpperCase(),
+      streakNum: String(streak),
+      streakUnit: streak === 1 ? 'day in a row' : 'days in a row',
+      calmNum: calmShiftLabel,
       toSettings: () => this.go('settings'),
       beginSession: () => this.go('setup'),
       seeAll: () => this.go('journal'),
-      beliefCards: journal.map(j => ({ old: j.tag === 'Anxiety' ? 'I always ruin things' : (j.tag === 'Anger' ? 'I have to stay angry to be heard' : 'I should be over this by now'), neu: j.belief, meta: j.date.replace('Jul', 'Tue ·') === j.date ? j.date + ' · ' + j.tag : j.date + ' · ' + j.tag })),
+      hasBeliefCards: s.sessions.length > 0,
+      beliefCards: s.sessions.slice(0, 6).map(row => ({
+        old: row.old_belief || '',
+        neu: row.belief || '',
+        meta: (row.started_at ? fmtDate(row.started_at) : '') + ' · ' + (row.emotion || '')
+      })),
 
       // setup
       situation: s.situation,
@@ -530,7 +833,7 @@ export class AppStore extends StoreBase {
       voiceLabel: s.voiceOn ? 'Guide voice on' : 'Guide voice off',
       voiceChip: 'height:38px;padding:0 16px;border-radius:99px;display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer;transition:all .2s;' +
         (s.voiceOn ? 'border:1px solid rgba(143,191,175,.6);color:#8FBFAF;background:rgba(143,191,175,.08)' : 'border:1px solid #3A3752;color:#6B678C'),
-      toggleVoice: () => this.setState({ voiceOn: !s.voiceOn }),
+      toggleVoice: () => { this.setState({ voiceOn: !s.voiceOn }); this.persistSettings(); },
       skipBreath: () => this.setState({ stage: 2 }),
       ground: () => this.setState({ stage: 2 }),
 
@@ -560,7 +863,7 @@ export class AppStore extends StoreBase {
       onChatKey: (e) => { if (e.key === 'Enter') this.send(this.state.chatInput); },
       sendNow: () => this.send(this.state.chatInput),
       chatDone: s.chatStep >= 5 && !s.typing,
-      toBelief: () => this.setState({ stage: 5 }),
+      toBelief: () => { this.setState({ stage: 5 }); this.fetchBeliefs(); },
 
       // session path map
       figureShown: !s.mapOpen,
@@ -588,8 +891,9 @@ export class AppStore extends StoreBase {
       belief: s.belief,
       onBelief: (e) => this.setState({ belief: e.target.value }),
       regen: () => {
-        const i = (s.draftI + 1) % this.DRAFTS.length;
-        this.setState({ draftI: i, belief: this.DRAFTS[i] });
+        const drafts = s.aiDrafts && s.aiDrafts.length ? s.aiDrafts : this.DRAFTS;
+        const i = (s.draftI + 1) % drafts.length;
+        this.setState({ draftI: i, belief: drafts[i] });
       },
       feelsTrue: () => this.setState({ stage: 6 }),
 
@@ -601,14 +905,32 @@ export class AppStore extends StoreBase {
       complete: () => this.go('summary'),
 
       // summary
-      sumMeta: s.emotion + ' · 12 min session',
+      sumMeta: s.emotion + ' · ' + Math.max(1, Math.round(((Date.now() - (s.startedAt || Date.now())) / 60000))) + ' min session',
       shiftText: s.intensity + ' → ' + Math.round(s.after),
       barBefore, barAfter, remindChip,
       toggleRemind: () => this.setState({ remind: !s.remind }),
       save: () => {
-        const entry = { tag: s.emotion, date: 'Jul 11', dur: '12 min', belief: s.belief, shift: s.intensity + ' → ' + Math.round(s.after) };
-        this.setState({ journal: [entry].concat(s.journal), screen: 'journal', filter: 'All' });
-        this.showToast('Saved — only on this phone.');
+        const now = Date.now();
+        const startedAt = s.startedAt || now - 60000;
+        const row = {
+          id: s.sessionId || crypto.randomUUID(),
+          started_at: new Date(startedAt).toISOString(),
+          ended_at: new Date(now).toISOString(),
+          duration_min: Math.max(1, Math.round((now - startedAt) / 60000)),
+          situation: s.situation || null,
+          emotion: s.emotion,
+          intensity: s.intensity,
+          after_intensity: Math.round(s.after),
+          old_belief: this.OLD,
+          belief: s.belief,
+          shift: s.intensity + ' → ' + Math.round(s.after),
+          chat: s.chat,
+          moments: this.classifyMoments(s.chat),
+          topics: s.topics
+        };
+        pushSession(row);
+        this.setState({ sessions: [row].concat(s.sessions), screen: 'journal', filter: 'All' });
+        this.showToast('Saved to your journal.');
       },
 
       // journal
@@ -619,17 +941,27 @@ export class AppStore extends StoreBase {
       },
       jRows, jEmpty: filtered.length === 0, jHas: filtered.length > 0,
       beginNow: () => this.go('setup'),
-      hasTopics: s.topics.length > 0,
-      topicChips: s.topics.map(tp => ({
-        t: tp.t,
-        tap: () => { this.setState({ screen: 'setup', situation: tp.t, paywall: false }); this.showToast('New session from your note.'); }
-      })),
+      // "for later" notes come from recent saved sessions (plus any noted mid-session)
+      hasTopics: (() => {
+        const fromSessions = s.sessions.slice(0, 5).flatMap(r => Array.isArray(r.topics) ? r.topics : []);
+        return (s.topics.length + fromSessions.length) > 0;
+      })(),
+      topicChips: s.topics.concat(s.sessions.slice(0, 5).flatMap(r => Array.isArray(r.topics) ? r.topics : []))
+        .slice(0, 6)
+        .map(tp => ({
+          t: tp.t,
+          tap: () => { this.setState({ screen: 'setup', situation: tp.t, paywall: false }); this.showToast('New session from your note.'); }
+        })),
 
       // connections (threads)
       ...TH,
 
       // progress
       beliefRows, emoSegs,
+      hasProgressData: s.sessions.length > 0,
+      totalSessions: String(recent.length),
+      avgDropLabel: drops.length ? avgDrop.toFixed(1) : '—',
+      rangeLabel: (s.sessions.length ? fmtDate(s.sessions[s.sessions.length - 1].started_at) : '') + ' — ' + (s.sessions.length ? fmtDate(s.sessions[0].started_at) : ''),
 
       // tabs
       tabs: [
@@ -654,24 +986,28 @@ export class AppStore extends StoreBase {
 
       // settings
       plus,
+      profileName: s.displayName || 'You',
+      profileEmail: s.email || '',
       accountTap: () => { if (!plus) this.setState({ paywall: true }); },
-      voiceThumb, voiceDown: this.mkSlider('voiceSpeed', 1, false),
+      voiceThumb, voiceDown: (e) => { this.mkSlider('voiceSpeed', 1, false)(e); this.persistSettings(); },
       hapTrack: track(s.haptics), hapKnob: knob(s.haptics),
-      toggleHap: () => this.setState({ haptics: !s.haptics }),
+      toggleHap: () => { this.setState({ haptics: !s.haptics }); this.persistSettings(); },
       trTrack: track(s.transcripts), trKnob: knob(s.transcripts),
       toggleTr: () => {
         this.setState({ transcripts: !s.transcripts });
+        this.persistSettings();
         if (!s.transcripts) this.showToast('Transcripts will sync securely.');
       },
-      exportTap: () => this.showToast('Export prepared — check your email.'),
-      deleteTap: () => this.showToast('This would start account deletion.'),
-      methodTap: () => this.setState(Object.assign(this.freshState(), { screen: 'onb' })),
+      exportTap: () => this.showToast('Export is coming in a future update.'),
+      deleteTap: () => this.showToast('Account deletion is coming in a future update.'),
+      methodTap: () => this.setState({ screen: 'onb', onb: 0 }),
       crisisTap: () => this.go('crisis'),
+      signOut: () => this.signOut(),
 
-      // crisis
-      call988: () => this.showToast('Calling 988…'),
-      text741: () => this.showToast('Opening Messages…'),
-      findHelp: () => this.showToast('Opening international directory…'),
+      // crisis — real handoffs (numbers are US-based; findHelp covers the rest)
+      call988: () => { this.showToast('Calling 988…'); try { window.location.href = 'tel:988'; } catch { /* browser */ } },
+      text741: () => { this.showToast('Opening Messages…'); try { window.location.href = 'sms:741741&body=HOME'; } catch { /* browser */ } },
+      findHelp: () => { try { window.open('https://findahelpline.com', '_blank'); } catch { /* popup blocked */ } },
       breatheInstead: () => this.go('session', { stage: 1 }),
       endOkay: () => { this.go('home'); this.showToast("Session ended. You're in control."); }
     };

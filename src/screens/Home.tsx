@@ -12,8 +12,8 @@ export function Home() {
         <div data-screen-label="03 Home" style={sx("position:absolute;inset:0;animation:cvFadeUp .45s ease both")}>
           <div style={sx("position:absolute;inset:0;overflow-y:auto;padding:74px 20px 130px;box-sizing:border-box")} className="cvs">
             <div style={sx("display:flex;align-items:center;justify-content:space-between")}>
-              <div style={sx("font-family:Lora,serif;font-size:21px")}>Good evening, Alex</div>
-              <div onClick={v.toSettings} style={sx("width:36px;height:36px;border-radius:50%;border:1px solid rgba(165,161,194,.5);display:flex;align-items:center;justify-content:center;background:linear-gradient(135deg,#2C2950,#1E1C33);font-family:Lora,serif;font-size:15px;color:#A5A1C2;cursor:pointer")}>A</div>
+              <div style={sx("font-family:Lora,serif;font-size:21px")}>{v.greeting}</div>
+              <div onClick={v.toSettings} style={sx("width:36px;height:36px;border-radius:50%;border:1px solid rgba(165,161,194,.5);display:flex;align-items:center;justify-content:center;background:linear-gradient(135deg,#2C2950,#1E1C33);font-family:Lora,serif;font-size:15px;color:#A5A1C2;cursor:pointer")}>{v.avatarLetter}</div>
             </div>
             <div style={sx("font-size:14px;color:#A5A1C2;margin-top:5px")}>How are you arriving today?</div>
             <div style={sx("position:relative;margin-top:18px;height:308px;border-radius:24px;overflow:hidden;background:linear-gradient(180deg,#232045 0%,#2A2550 55%,#4A3550 82%,#7A5350 100%)")}>
@@ -41,8 +41,8 @@ export function Home() {
                     <path d="M10 1.5v3M18.5 10h-3M10 18.5v-3M1.5 10h3" stroke="#E8A188" strokeWidth="1.1" strokeLinecap="round" />
                   </svg>
                 </div>
-                <div style={sx("font-family:Lora,serif;font-size:30px;margin-top:6px")}>4</div>
-                <div style={sx("font-size:11.5px;color:#6B678C;margin-top:2px")}>days in a row</div>
+                <div style={sx("font-family:Lora,serif;font-size:30px;margin-top:6px")}>{v.streakNum}</div>
+                <div style={sx("font-size:11.5px;color:#6B678C;margin-top:2px")}>{v.streakUnit}</div>
               </div>
               <div style={sx("flex:1;border-radius:24px;background:rgba(38,36,64,.8);box-shadow:inset 0 0 24px rgba(236,234,247,.03);padding:16px 18px")}>
                 <div style={sx("display:flex;align-items:center;justify-content:space-between")}>
@@ -51,26 +51,30 @@ export function Home() {
                     <path d="M1 4c2.5 0 2.5 4 5 4s2.5-5 5-5 2.5 6 5 6 2-3 3-3" fill="none" stroke="#8FBFAF" strokeWidth="1.3" strokeLinecap="round" />
                   </svg>
                 </div>
-                <div style={sx("font-family:Lora,serif;font-size:30px;margin-top:6px")}>−3.2</div>
+                <div style={sx("font-family:Lora,serif;font-size:30px;margin-top:6px")}>{v.calmNum}</div>
                 <div style={sx("font-size:11.5px;color:#6B678C;margin-top:2px")}>avg. intensity drop</div>
               </div>
             </div>
-            <div style={sx("display:flex;align-items:baseline;justify-content:space-between;margin-top:26px")}>
-              <div style={sx("font-family:Lora,serif;font-size:18px")}>Your new beliefs</div>
-              <div onClick={v.seeAll} style={sx("font-size:13px;color:#E8A188;cursor:pointer")}>See all</div>
-            </div>
-            <div style={sx("display:flex;gap:12px;overflow-x:auto;margin:12px -20px 0;padding:0 20px 6px")} className="cvs">
-              {v.beliefCards.map((b: any, i: number) => (
-                <div key={i} style={sx("flex:none;width:270px;border-radius:24px;background:rgba(38,36,64,.8);box-shadow:inset 0 0 24px rgba(236,234,247,.03);padding:18px 20px;box-sizing:border-box")}>
-                  <div style={sx("font-size:12.5px;color:#6B678C;text-decoration:line-through")}>{b.old}</div>
-                  <svg width="11" height="12" viewBox="0 0 11 12" style={sx("margin:7px 0 5px")}>
-                    <path d="M5.5 1v9M2 7l3.5 3.5L9 7" fill="none" stroke="#8FBFAF" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round" />
-                  </svg>
-                  <div style={sx("font-family:Lora,serif;font-size:16.5px;line-height:1.4;color:#ECEAF7")}>{b.neu}</div>
-                  <div style={sx("font-size:11.5px;color:#6B678C;margin-top:10px")}>{b.meta}</div>
+            {v.hasBeliefCards && (
+              <>
+                <div style={sx("display:flex;align-items:baseline;justify-content:space-between;margin-top:26px")}>
+                  <div style={sx("font-family:Lora,serif;font-size:18px")}>Your new beliefs</div>
+                  <div onClick={v.seeAll} style={sx("font-size:13px;color:#E8A188;cursor:pointer")}>See all</div>
                 </div>
-              ))}
-            </div>
+                <div style={sx("display:flex;gap:12px;overflow-x:auto;margin:12px -20px 0;padding:0 20px 6px")} className="cvs">
+                  {v.beliefCards.map((b: any, i: number) => (
+                    <div key={i} style={sx("flex:none;width:270px;border-radius:24px;background:rgba(38,36,64,.8);box-shadow:inset 0 0 24px rgba(236,234,247,.03);padding:18px 20px;box-sizing:border-box")}>
+                      <div style={sx("font-size:12.5px;color:#6B678C;text-decoration:line-through")}>{b.old}</div>
+                      <svg width="11" height="12" viewBox="0 0 11 12" style={sx("margin:7px 0 5px")}>
+                        <path d="M5.5 1v9M2 7l3.5 3.5L9 7" fill="none" stroke="#8FBFAF" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round" />
+                      </svg>
+                      <div style={sx("font-family:Lora,serif;font-size:16.5px;line-height:1.4;color:#ECEAF7")}>{b.neu}</div>
+                      <div style={sx("font-size:11.5px;color:#6B678C;margin-top:10px")}>{b.meta}</div>
+                    </div>
+                  ))}
+                </div>
+              </>
+            )}
           </div>
         </div>
       )}

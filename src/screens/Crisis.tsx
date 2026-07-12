@@ -46,7 +46,7 @@ export function Crisis() {
             </div>
           </div>
           <div style={sx("flex:.5")} />
-          <div style={sx("position:relative;display:flex;flex-direction:column;align-items:center;padding-bottom:36px")}>
+          <div style={sx("position:relative;display:flex;flex-direction:column;align-items:center;padding-bottom:calc(36px + env(safe-area-inset-bottom, 0px))")}>
             <div onClick={v.breatheInstead} style={sx("display:flex;align-items:center;gap:9px;font-size:14.5px;color:#F0DCC6;cursor:pointer")} className={pseudo('hover', "color:#ECEAF7")}>
               <div style={sx("width:20px;height:20px;border-radius:50%;border:1px solid rgba(240,214,180,.7);display:flex;align-items:center;justify-content:center")}>
                 <div style={sx("width:9px;height:9px;border-radius:50%;background:rgba(240,214,180,.4);animation:cvBreathe 4s ease-in-out infinite")} />
