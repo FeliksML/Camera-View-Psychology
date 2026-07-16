@@ -27,16 +27,20 @@ https://www.recraft.ai/project/0da7f299-8c9f-4725-a453-99064dffcf5b) по про
 
 ## Что уже интегрировано в приложение (2026-07-12)
 
-- **App icon** — `appicon/concept-a-1.png` → `scripts/make-icon.mjs` собирает
-  `assets/icon-only.png` + `resources/icon.png`, а `npx @capacitor/assets generate --ios`
-  прописал `ios/.../AppIcon.appiconset/AppIcon-512@2x.png`. Свап концепта — одна
-  строка `SRC_ICON` в скрипте (concept-b / concept-c как альтернативы; старая
-  синтетическая SVG-иконка — в истории git).
+- **App icon** — мотив «диафрагмы»: центр `splash/splash-1.png` (пич-точка + кольца
+  на тёмном) кропится в `scripts/make-icon.mjs` → `assets/icon-only.png` +
+  `resources/icon.png`, а `npx @capacitor/assets generate --ios` прописал
+  `ios/.../AppIcon.appiconset/AppIcon-512@2x.png`. Выбран за максимальный контраст
+  на 40px и консистентность со splash. Флаг `ICON_FROM_APERTURE=false` в скрипте
+  переключит на фигуру `concept-a` (старая синтетическая SVG-иконка — в истории git).
 - **Splash** — `splash/splash-1.png` апскейлен до 2732² + серифный вордмарк
   «CameraView» → `assets/splash.png` / `splash-dark.png` → весь `Splash.imageset` в iOS.
 - **Signin backdrop** — `illustrations/signin-bg-1.png` подключён как фон экрана
   входа (`src/screens/Signin.tsx`, Vite-импорт PNG, слой z-index:0 + затемняющий
   градиент снизу под кнопки). Экран был плоско-тёмным → чистый additive-слой.
+- **Paywall backdrop** — тот же `signin-bg-1.png` за premium-эмблемой листа
+  (`src/components/Paywall.tsx`, opacity .4) — диафрагма подложки усиливает кольца
+  эмблемы, частицы добавляют глубину; текст/цены/CTA остаются читаемыми.
 
 ## Осознанно НЕ трогали (иначе регресс)
 
