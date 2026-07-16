@@ -3,6 +3,7 @@
 import { sx } from '../lib/sx'
 import { pseudo } from '../lib/pseudo'
 import { useApp } from '../store/AppContext'
+import sheetBg from '../../assets/recraft/illustrations/signin-bg-1.png'
 
 export function Paywall() {
   const v = useApp()
@@ -12,10 +13,12 @@ export function Paywall() {
         <div data-screen-label="14 Paywall" style={sx("position:absolute;inset:0;z-index:40")}>
           <div onClick={v.closePaywall} style={sx("position:absolute;inset:0;background:rgba(10,9,17,.6);animation:cvFade .3s ease both")} />
           <div style={sx("position:absolute;left:0;right:0;bottom:0;top:54px;border-radius:28px 28px 0 0;background:linear-gradient(180deg,#1E1B36 0%,#191631 100%);animation:cvSheet .45s cubic-bezier(.2,.8,.25,1) both;overflow:hidden;display:flex;flex-direction:column")}>
-            <div style={sx("display:flex;justify-content:center;padding:10px 0 0")}>
+            {/* Recraft aperture backdrop — subtle warm halo + drifting particles behind the emblem */}
+            <div style={sx(`position:absolute;inset:0;z-index:0;background-image:url(${sheetBg});background-size:cover;background-position:center top;opacity:.4;pointer-events:none`)} />
+            <div style={sx("position:relative;z-index:1;display:flex;justify-content:center;padding:10px 0 0")}>
               <div style={sx("width:38px;height:4.5px;border-radius:99px;background:rgba(165,161,194,.35)")} />
             </div>
-            <div style={sx("flex:1;overflow-y:auto;padding:6px 24px calc(30px + env(safe-area-inset-bottom, 0px))")} className="cvs">
+            <div style={sx("position:relative;z-index:1;flex:1;overflow-y:auto;padding:6px 24px calc(30px + env(safe-area-inset-bottom, 0px))")} className="cvs">
               <div style={sx("position:relative;height:210px;margin:8px -8px 0")}>
                 <div style={sx("position:absolute;left:0;right:0;bottom:0;height:90px;background:radial-gradient(ellipse at 50% 100%,rgba(232,161,136,.22) 0%,transparent 70%)")} />
                 <div style={sx("position:absolute;left:14%;top:12%;width:3px;height:3px;border-radius:50%;background:rgba(236,234,247,.5)")} />
